@@ -4,25 +4,25 @@ import (
 	"errors"
 	"testing"
 
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/feegrant"
+	"cosmossdk.io/x/feegrant/keeper"
+	"cosmossdk.io/x/feegrant/module"
+	feegranttestutil "cosmossdk.io/x/feegrant/testutil"
 
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	"github.com/cosmos/cosmos-sdk/x/feegrant"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/keeper"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/module"
-	feegranttestutil "github.com/cosmos/cosmos-sdk/x/feegrant/testutil"
 )
 
 var (
@@ -39,8 +39,6 @@ type genesisFixture struct {
 }
 
 func initFixture(t *testing.T) *genesisFixture {
-	t.Helper()
-
 	key := storetypes.NewKVStoreKey(feegrant.StoreKey)
 	testCtx := testutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
 	encCfg := moduletestutil.MakeTestEncodingConfig(module.AppModuleBasic{})
@@ -132,6 +130,7 @@ func TestInitGenesis(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			f := initFixture(t)
 			if !tc.invalidAddr {

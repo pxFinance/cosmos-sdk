@@ -13,7 +13,7 @@ import (
 
 type interfaceMarshaler struct {
 	marshal   func(i proto.Message) ([]byte, error)
-	unmarshal func(bz []byte, ptr any) error
+	unmarshal func(bz []byte, ptr interface{}) error
 }
 
 func testInterfaceMarshaling(require *require.Assertions, cdc interfaceMarshaler, isAminoBin bool) {
@@ -92,9 +92,7 @@ func testMarshaling(t *testing.T, cdc interface {
 	codec.JSONCodec
 },
 ) {
-	t.Helper()
-
-	cdcAny, err := types.NewAnyWithValue(&testdata.Dog{Name: "rufus"})
+	any, err := types.NewAnyWithValue(&testdata.Dog{Name: "rufus"})
 	require.NoError(t, err)
 
 	testCases := []testCase{
@@ -115,14 +113,15 @@ func testMarshaling(t *testing.T, cdc interface {
 	if _, ok := cdc.(*codec.AminoCodec); ok {
 		testCases = append(testCases, testCase{
 			"any marshaling",
-			&testdata.HasAnimal{Animal: cdcAny},
-			&testdata.HasAnimal{Animal: cdcAny},
+			&testdata.HasAnimal{Animal: any},
+			&testdata.HasAnimal{Animal: any},
 			false,
 			false,
 		})
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		m1 := mustMarshaler{cdc.Marshal, cdc.MustMarshal, cdc.Unmarshal, cdc.MustUnmarshal}
 		m2 := mustMarshaler{cdc.MarshalLengthPrefixed, cdc.MustMarshalLengthPrefixed, cdc.UnmarshalLengthPrefixed, cdc.MustUnmarshalLengthPrefixed}
 		m3 := mustMarshaler{

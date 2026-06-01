@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/cosmos/cosmos-sdk/x/tx/internal/testpb"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/textual"
+	"cosmossdk.io/x/tx/internal/testpb"
+	"cosmossdk.io/x/tx/signing/textual"
 )
 
 func TestDispatcher(t *testing.T) {
@@ -32,6 +32,7 @@ func TestDispatcher(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			textual, err := textual.NewSignModeHandler(textual.SignModeOptions{CoinMetadataQuerier: EmptyCoinMetadataQuerier})
 			require.NoError(t, err)

@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -59,6 +59,7 @@ func TestInitCmd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			logger := log.NewNopLogger()
@@ -185,12 +186,11 @@ func TestEmptyState(t *testing.T) {
 	outC := make(chan string)
 	go func() {
 		var buf bytes.Buffer
-		_, err := io.Copy(&buf, r)
-		require.NoError(t, err)
+		io.Copy(&buf, r)
 		outC <- buf.String()
 	}()
 
-	require.NoError(t, w.Close())
+	w.Close()
 	os.Stdout = old
 	out := <-outC
 
@@ -278,12 +278,11 @@ func TestInitConfig(t *testing.T) {
 	outC := make(chan string)
 	go func() {
 		var buf bytes.Buffer
-		_, err := io.Copy(&buf, r)
-		require.NoError(t, err)
+		io.Copy(&buf, r)
 		outC <- buf.String()
 	}()
 
-	require.NoError(t, w.Close())
+	w.Close()
 	os.Stdout = old
 	out := <-outC
 

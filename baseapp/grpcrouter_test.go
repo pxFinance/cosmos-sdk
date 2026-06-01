@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec/types"
@@ -56,7 +56,7 @@ func TestGRPCQueryRouter(t *testing.T) {
 func TestGRPCRouterHybridHandlers(t *testing.T) {
 	assertRouterBehaviour := func(helper *baseapp.QueryServiceTestHelper) {
 		// test getting the handler by name
-		handlers := helper.HybridHandlerByRequestName("testpb.EchoRequest")
+		handlers := helper.GRPCQueryRouter.HybridHandlerByRequestName("testpb.EchoRequest")
 		require.NotNil(t, handlers)
 		require.Len(t, handlers, 1)
 		handler := handlers[0]
@@ -108,7 +108,7 @@ func TestRegisterQueryServiceTwice(t *testing.T) {
 		&appBuilder)
 	require.NoError(t, err)
 	db := dbm.NewMemDB()
-	app := appBuilder.Build(db)
+	app := appBuilder.Build(db, nil)
 
 	// First time registering service shouldn't panic.
 	require.NotPanics(t, func() {
@@ -162,7 +162,6 @@ func TestQueryDataRaces_uniqueConnectionsToSameHandler(t *testing.T) {
 }
 
 func testQueryDataRacesSameHandler(t *testing.T, makeClientConn func(*baseapp.GRPCQueryRouter) *baseapp.QueryServiceTestHelper) {
-	t.Helper()
 	t.Parallel()
 
 	qr := baseapp.NewGRPCQueryRouter()
@@ -182,13 +181,13 @@ func testQueryDataRacesSameHandler(t *testing.T, makeClientConn func(*baseapp.GR
 	n := 1000
 	ready := make(chan bool, n)
 	go func() {
-		for range n {
+		for i := 0; i < n; i++ {
 			<-ready
 		}
 		close(greenlight)
 	}()
 
-	for range n {
+	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

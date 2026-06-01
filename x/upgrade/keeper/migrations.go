@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 
 	storetypes "cosmossdk.io/core/store"
+	"cosmossdk.io/store/prefix"
+	"cosmossdk.io/x/upgrade/types"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 // Migrator is a struct for handling in-place store migrations.
@@ -23,6 +23,7 @@ func NewMigrator(keeper *Keeper) Migrator {
 
 // Migrate1to2 migrates from version 1 to 2.
 func (m Migrator) Migrate1to2(ctx sdk.Context) error {
+
 	return migrateDoneUpgradeKeys(ctx, m.keeper.storeService)
 }
 

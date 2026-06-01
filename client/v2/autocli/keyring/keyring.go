@@ -14,14 +14,13 @@ var KeyringContextKey struct{}
 
 var _ Keyring = &KeyringImpl{}
 
-type KeyringImpl struct { //nolint: revive // we can ignore this, as this type is being used
+type KeyringImpl struct { //nolint:revive // stuttering is fine
 	k Keyring
 }
 
 // NewKeyringInContext returns a new context with the keyring set.
 func NewKeyringInContext(ctx context.Context, k Keyring) context.Context {
-	// TODO: should this be fixed?
-	return context.WithValue(ctx, KeyringContextKey, NewKeyringImpl(k)) //nolint:staticcheck // we can ignore this safely until we make a fix for this
+	return context.WithValue(ctx, KeyringContextKey, NewKeyringImpl(k))
 }
 
 func NewKeyringImpl(k Keyring) *KeyringImpl {

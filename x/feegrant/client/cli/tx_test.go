@@ -15,6 +15,9 @@ import (
 	_ "cosmossdk.io/api/cosmos/feegrant/v1beta1"
 	_ "cosmossdk.io/api/cosmos/gov/v1beta1"
 	sdkmath "cosmossdk.io/math"
+	"cosmossdk.io/x/feegrant"
+	"cosmossdk.io/x/feegrant/client/cli"
+	"cosmossdk.io/x/feegrant/module"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -25,9 +28,6 @@ import (
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
-	"github.com/cosmos/cosmos-sdk/x/feegrant"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/client/cli"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/module"
 	govcli "github.com/cosmos/cosmos-sdk/x/gov/client/cli"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
@@ -74,7 +74,7 @@ func (s *CLITestSuite) SetupSuite() {
 
 	ctxGen := func() client.Context {
 		bz, _ := s.encCfg.Codec.Marshal(&sdk.TxResponse{})
-		c := clitestutil.NewMockCometRPC(abci.ResponseQuery{
+		c := clitestutil.NewMockCometRPC(abci.QueryResponse{
 			Value: bz,
 		})
 
@@ -412,6 +412,8 @@ func (s *CLITestSuite) TestNewCmdFeeGrant() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdFeeGrant(codecaddress.NewBech32Codec("cosmos"))
 			out, err := clitestutil.ExecTestCLICmd(clientCtx, cmd, tc.args)
@@ -529,7 +531,7 @@ func (s *CLITestSuite) msgSubmitLegacyProposal(clientCtx client.Context, from, t
 
 	args = append(args, extraArgs...)
 
-	cmd := govcli.NewCmdSubmitLegacyProposal() //nolint:staticcheck // needed for legacy testing
+	cmd := govcli.NewCmdSubmitLegacyProposal()
 
 	out, err := clitestutil.ExecTestCLICmd(clientCtx, cmd, args)
 	s.Require().NoError(err)
@@ -606,6 +608,8 @@ func (s *CLITestSuite) TestFilteredFeeAllowance() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdFeeGrant(codecaddress.NewBech32Codec("cosmos"))
 			out, err := clitestutil.ExecTestCLICmd(clientCtx, cmd, tc.args)
@@ -667,6 +671,8 @@ func (s *CLITestSuite) TestFilteredFeeAllowance() {
 	}
 
 	for _, tc := range cases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			err := tc.malleate()
 			s.Require().NoError(err)

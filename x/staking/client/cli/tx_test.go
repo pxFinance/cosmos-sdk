@@ -53,7 +53,7 @@ func (s *CLITestSuite) SetupSuite() {
 
 	ctxGen := func() client.Context {
 		bz, _ := s.encCfg.Codec.Marshal(&sdk.TxResponse{})
-		c := clitestutil.NewMockCometRPC(abci.ResponseQuery{
+		c := clitestutil.NewMockCometRPC(abci.QueryResponse{
 			Value: bz,
 		})
 		return s.baseCtx.WithClient(c)
@@ -61,7 +61,7 @@ func (s *CLITestSuite) SetupSuite() {
 	s.clientCtx = ctxGen()
 
 	s.addrs = make([]sdk.AccAddress, 0)
-	for range 3 {
+	for i := 0; i < 3; i++ {
 		k, _, err := s.clientCtx.Keyring.NewMnemonic("NewValidator", keyring.English, sdk.FullFundraiserPath, keyring.DefaultBIP39Passphrase, hd.Secp256k1)
 		s.Require().NoError(err)
 
@@ -145,6 +145,7 @@ func (s *CLITestSuite) TestPrepareConfigForTxCreateValidator() {
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		s.Run(tc.name, func() {
 			fs, _ := cli.CreateValidatorMsgFlagSet(ip)
 			fs.String(flags.FlagName, "", "name of private key with which to sign the gentx")
@@ -291,6 +292,7 @@ func (s *CLITestSuite) TestNewCreateValidatorCmd() {
 		},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {
@@ -307,7 +309,7 @@ func (s *CLITestSuite) TestNewCreateValidatorCmd() {
 }
 
 func (s *CLITestSuite) TestNewEditValidatorCmd() {
-	cmd := cli.NewEditValidatorCmd(addresscodec.NewBech32Codec("cosmos"))
+	cmd := cli.NewEditValidatorCmd(addresscodec.NewBech32Codec("cosmosvaloper"))
 
 	moniker := "testing"
 	details := "bio"
@@ -413,6 +415,8 @@ func (s *CLITestSuite) TestNewEditValidatorCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {
@@ -474,6 +478,8 @@ func (s *CLITestSuite) TestNewDelegateCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {
@@ -554,6 +560,8 @@ func (s *CLITestSuite) TestNewRedelegateCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {
@@ -615,6 +623,8 @@ func (s *CLITestSuite) TestNewUnbondCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {
@@ -692,6 +702,8 @@ func (s *CLITestSuite) TestNewCancelUnbondingDelegationCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			out, err := clitestutil.ExecTestCLICmd(s.clientCtx, cmd, tc.args)
 			if tc.expectErrMsg != "" {

@@ -30,7 +30,7 @@ func CollectKeyValues[K, V any, I iterator[K], Idx collections.Indexes[K, V]](
 		kvs = append(kvs, kv)
 		return false
 	})
-	return kvs, err
+	return
 }
 
 // ScanKeyValues calls the do function on every record found, in the indexed map
@@ -42,23 +42,15 @@ func ScanKeyValues[K, V any, I iterator[K], Idx collections.Indexes[K, V]](
 	iter I,
 	do func(kv collections.KeyValue[K, V]) (stop bool),
 ) (err error) {
-	defer func() {
-		if cerr := iter.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer iter.Close()
 
-	var (
-		pk    K
-		value V
-	)
 	for ; iter.Valid(); iter.Next() {
-		pk, err = iter.PrimaryKey()
+		pk, err := iter.PrimaryKey()
 		if err != nil {
 			return err
 		}
 
-		value, err = indexedMap.Get(ctx, pk)
+		value, err := indexedMap.Get(ctx, pk)
 		if err != nil {
 			return err
 		}
@@ -87,7 +79,7 @@ func CollectValues[K, V any, I iterator[K], Idx collections.Indexes[K, V]](
 		values = append(values, value)
 		return false
 	})
-	return values, err
+	return
 }
 
 // ScanValues collects all the values from an Index iterator and the IndexedMap in a lazy way.
@@ -97,29 +89,22 @@ func ScanValues[K, V any, I iterator[K], Idx collections.Indexes[K, V]](
 	indexedMap *collections.IndexedMap[K, V, Idx],
 	iter I,
 	f func(value V) (stop bool),
-) (err error) {
-	defer func() {
-		if cerr := iter.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+) error {
+	defer iter.Close()
 
-	var (
-		key   K
-		value V
-	)
 	for ; iter.Valid(); iter.Next() {
-		key, err = iter.PrimaryKey()
+		key, err := iter.PrimaryKey()
 		if err != nil {
 			return err
 		}
 
-		value, err = indexedMap.Get(ctx, key)
+		value, err := indexedMap.Get(ctx, key)
 		if err != nil {
 			return err
 		}
 
-		if f(value) {
+		stop := f(value)
+		if stop {
 			return nil
 		}
 	}

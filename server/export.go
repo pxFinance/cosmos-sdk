@@ -66,13 +66,19 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 				return nil
 			}
 
+			traceWriterFile, _ := cmd.Flags().GetString(flagTraceStore)
+			traceWriter, err := openTraceWriter(traceWriterFile)
+			if err != nil {
+				return err
+			}
+
 			height, _ := cmd.Flags().GetInt64(FlagHeight)
 			forZeroHeight, _ := cmd.Flags().GetBool(FlagForZeroHeight)
 			jailAllowedAddrs, _ := cmd.Flags().GetStringSlice(FlagJailAllowedAddrs)
 			modulesToExport, _ := cmd.Flags().GetStringSlice(FlagModulesToExport)
 			outputDocument, _ := cmd.Flags().GetString(flags.FlagOutputDocument)
 
-			exported, err := appExporter(serverCtx.Logger, db, height, forZeroHeight, jailAllowedAddrs, serverCtx.Viper, modulesToExport)
+			exported, err := appExporter(serverCtx.Logger, db, traceWriter, height, forZeroHeight, jailAllowedAddrs, serverCtx.Viper, modulesToExport)
 			if err != nil {
 				return fmt.Errorf("error exporting state: %w", err)
 			}
@@ -111,7 +117,7 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 
 	cmd.Flags().String(flags.FlagHome, defaultNodeHome, "The application home directory")
 	cmd.Flags().Int64(FlagHeight, -1, "Export state from a particular height (-1 means latest height)")
-	cmd.Flags().Bool(FlagForZeroHeight, false, "Export state to start at height zero (perform preprocessing)")
+	cmd.Flags().Bool(FlagForZeroHeight, false, "Export state to start at height zero (perform preproccessing)")
 	cmd.Flags().StringSlice(FlagJailAllowedAddrs, []string{}, "Comma-separated list of operator addresses of jailed validators to unjail")
 	cmd.Flags().StringSlice(FlagModulesToExport, []string{}, "Comma-separated list of modules to export. If empty, will export all modules")
 	cmd.Flags().String(flags.FlagOutputDocument, "", "Exported state is written to the given file instead of STDOUT")

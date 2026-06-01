@@ -7,8 +7,9 @@ defined in ABCI++.
 
 ## Extend Vote
 
-ABCI 2.0 (colloquially called ABCI++) allows an application to extend a pre-commit vote with arbitrary data. This process does NOT have to be deterministic, and the data returned can be unique to the
-validator process. The Cosmos SDK defines [`sdk.ExtendVoteHandler`](https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/types/abci.go#L32):
+ABCI++ allows an application to extend a pre-commit vote with arbitrary data. This
+process does NOT have to be deterministic, and the data returned can be unique to the
+validator process. The Cosmos SDK defines [`baseapp.ExtendVoteHandler`](https://github.com/cosmos/cosmos-sdk/blob/v0.50.1/types/abci.go#L26-L27):
 
 ```go
 type ExtendVoteHandler func(Context, *abci.RequestExtendVote) (*abci.ResponseExtendVote, error)
@@ -28,7 +29,7 @@ to consider the size of the vote extensions as they could increase latency in bl
 production. See [here](https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/docs/qa/CometBFT-QA-38.md#vote-extensions-testbed)
 for more details.
 
-Click [here](https://docs.cosmos.network/main/build/abci/vote-extensions) if you would like a walkthrough of how to implement vote extensions.
+Click [here](https://docs.cosmos.network/main/user/tutorials/vote-extensions) if you would like a walkthrough of how to implement vote extensions.
 
 
 ## Verify Vote Extension
@@ -49,7 +50,7 @@ validators will share the same view of what vote extensions they verify dependin
 on how votes are propagated. See [here](https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/spec/abci/abci++_methods.md#verifyvoteextension)
 for more details.
 
-Additionally, please keep in mind that performance can be degraded if vote extensions are too big (https://docs.cometbft.com/v0.38/qa/cometbft-qa-38#vote-extensions-testbed), so we highly recommend a size validation in `ValidateVoteExtensions`.
+Additionally, please keep in mind that performance can be degraded if vote extensions are too big (https://docs.cometbft.com/v0.38/qa/cometbft-qa-38#vote-extensions-testbed), so we highly recommend a size validation in `VerifyVoteExtensions`.
 
 
 ## Vote Extension Propagation
@@ -78,7 +79,7 @@ will be available to the application during the subsequent `FinalizeBlock` call.
 An example of how a pre-FinalizeBlock hook could look like is shown below:
 
 ```go
-app.SetPreBlocker(func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+app.SetPreBlocker(func(ctx sdk.Context, req *abci.RequestFinalizeBlock) error {
     allVEs := []VE{} // store all parsed vote extensions here
     for _, tx := range req.Txs {
         // define a custom function that tries to parse the tx as a vote extension
@@ -95,10 +96,10 @@ app.SetPreBlocker(func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.Re
     result := compute(allVEs)
     err := storeVEResult(ctx, result)
     if err != nil {
-        return nil, err
+        return err
     }
 
-    return &sdk.ResponsePreBlock{}, nil
+    return nil
 })
 
 ```

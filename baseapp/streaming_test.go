@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	tmproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/require"
+
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	baseapptestutil "github.com/cosmos/cosmos-sdk/baseapp/testutil"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 )
 
 var _ storetypes.ABCIListener = (*MockABCIListener)(nil)
@@ -28,11 +29,11 @@ func NewMockABCIListener(name string) MockABCIListener {
 	}
 }
 
-func (m MockABCIListener) ListenFinalizeBlock(_ context.Context, _ abci.RequestFinalizeBlock, _ abci.ResponseFinalizeBlock) error {
+func (m MockABCIListener) ListenFinalizeBlock(_ context.Context, _ abci.FinalizeBlockRequest, _ abci.FinalizeBlockResponse) error {
 	return nil
 }
 
-func (m *MockABCIListener) ListenCommit(_ context.Context, _ abci.ResponseCommit, cs []*storetypes.StoreKVPair) error {
+func (m *MockABCIListener) ListenCommit(_ context.Context, _ abci.CommitResponse, cs []*storetypes.StoreKVPair) error {
 	m.ChangeSet = cs
 	return nil
 }
@@ -50,12 +51,11 @@ func TestABCI_MultiListener_StateChanges(t *testing.T) {
 	addListenerOpt := func(bapp *baseapp.BaseApp) { bapp.CommitMultiStore().AddListeners([]storetypes.StoreKey{distKey1}) }
 	suite := NewBaseAppSuite(t, anteOpt, distOpt, streamingManagerOpt, addListenerOpt)
 
-	_, err := suite.baseApp.InitChain(
-		&abci.RequestInitChain{
+	suite.baseApp.InitChain(
+		&abci.InitChainRequest{
 			ConsensusParams: &tmproto.ConsensusParams{},
 		},
 	)
-	require.NoError(t, err)
 
 	deliverKey := []byte("deliver-key")
 	baseapptestutil.RegisterCounterServer(suite.baseApp.MsgServiceRouter(), CounterServerImpl{t, capKey1, deliverKey})
@@ -63,24 +63,24 @@ func TestABCI_MultiListener_StateChanges(t *testing.T) {
 	nBlocks := 3
 	txPerHeight := 5
 
-	for blockN := range nBlocks {
+	for blockN := 0; blockN < nBlocks; blockN++ {
 		txs := [][]byte{}
 
 		var expectedChangeSet []*storetypes.StoreKVPair
 
 		// create final block context state
-		_, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: int64(blockN) + 1, Txs: txs})
+		_, err := suite.baseApp.FinalizeBlock(&abci.FinalizeBlockRequest{Height: int64(blockN) + 1, Txs: txs})
 		require.NoError(t, err)
 
-		for i := range txPerHeight {
+		for i := 0; i < txPerHeight; i++ {
 			counter := int64(blockN*txPerHeight + i)
 			tx := newTxCounter(t, suite.txConfig, counter, counter)
 
 			txBytes, err := suite.txConfig.TxEncoder()(tx)
 			require.NoError(t, err)
 
-			sKey := fmt.Appendf(nil, "distKey%d", i)
-			sVal := fmt.Appendf(nil, "distVal%d", i)
+			sKey := []byte(fmt.Sprintf("distKey%d", i))
+			sVal := []byte(fmt.Sprintf("distVal%d", i))
 			store := getFinalizeBlockStateCtx(suite.baseApp).KVStore(distKey1)
 			store.Set(sKey, sVal)
 
@@ -94,7 +94,7 @@ func TestABCI_MultiListener_StateChanges(t *testing.T) {
 			txs = append(txs, txBytes)
 		}
 
-		res, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: int64(blockN) + 1, Txs: txs})
+		res, err := suite.baseApp.FinalizeBlock(&abci.FinalizeBlockRequest{Height: int64(blockN) + 1, Txs: txs})
 		require.NoError(t, err)
 		for _, tx := range res.TxResults {
 			events := tx.GetEvents()
@@ -103,8 +103,7 @@ func TestABCI_MultiListener_StateChanges(t *testing.T) {
 			// require.Equal(t, sdk.MarkEventsToIndex(counterEvent(sdk.EventTypeMessage, counter).ToABCIEvents(), map[string]struct{}{})[0], events[2], "msg handler update counter event")
 		}
 
-		_, err = suite.baseApp.Commit()
-		require.NoError(t, err)
+		suite.baseApp.Commit()
 
 		require.Equal(t, expectedChangeSet, mockListener1.ChangeSet, "should contain the same changeSet")
 		require.Equal(t, expectedChangeSet, mockListener2.ChangeSet, "should contain the same changeSet")
@@ -120,10 +119,9 @@ func Test_Ctx_with_StreamingManager(t *testing.T) {
 	addListenerOpt := func(bapp *baseapp.BaseApp) { bapp.CommitMultiStore().AddListeners([]storetypes.StoreKey{distKey1}) }
 	suite := NewBaseAppSuite(t, streamingManagerOpt, addListenerOpt)
 
-	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+	suite.baseApp.InitChain(&abci.InitChainRequest{
 		ConsensusParams: &tmproto.ConsensusParams{},
 	})
-	require.NoError(t, err)
 
 	ctx := getFinalizeBlockStateCtx(suite.baseApp)
 	sm := ctx.StreamingManager()
@@ -133,10 +131,9 @@ func Test_Ctx_with_StreamingManager(t *testing.T) {
 
 	nBlocks := 2
 
-	for blockN := range nBlocks {
+	for blockN := 0; blockN < nBlocks; blockN++ {
 
-		_, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: int64(blockN) + 1})
-		require.NoError(t, err)
+		suite.baseApp.FinalizeBlock(&abci.FinalizeBlockRequest{Height: int64(blockN) + 1})
 
 		ctx := getFinalizeBlockStateCtx(suite.baseApp)
 		sm := ctx.StreamingManager()
@@ -144,7 +141,6 @@ func Test_Ctx_with_StreamingManager(t *testing.T) {
 		require.Equal(t, listeners, sm.ABCIListeners, fmt.Sprintf("should contain same listeners: %v", listeners))
 		require.Equal(t, true, sm.StopNodeOnErr, "should contain StopNodeOnErr = true")
 
-		_, err = suite.baseApp.Commit()
-		require.NoError(t, err)
+		suite.baseApp.Commit()
 	}
 }

@@ -9,10 +9,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 
 	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
-
-	"github.com/cosmos/cosmos-sdk/x/tx/decode"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson/internal/aminojsonpb"
+	"cosmossdk.io/x/tx/decode"
+	"cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/tx/signing/aminojson/internal/aminojsonpb"
 )
 
 // SignModeHandler implements the SIGN_MODE_LEGACY_AMINO_JSON signing mode.
@@ -92,15 +91,13 @@ func (h SignModeHandler) GetSignBytes(_ context.Context, signerData signing.Sign
 	}
 
 	signDoc := &aminojsonpb.AminoSignDoc{
-		AccountNumber:    signerData.AccountNumber,
-		TimeoutHeight:    body.TimeoutHeight,
-		ChainId:          signerData.ChainID,
-		Sequence:         signerData.Sequence,
-		Memo:             body.Memo,
-		Msgs:             txData.Body.Messages,
-		Unordered:        txData.Body.Unordered,
-		TimeoutTimestamp: txData.Body.TimeoutTimestamp,
-		Fee:              fee,
+		AccountNumber: signerData.AccountNumber,
+		TimeoutHeight: body.TimeoutHeight,
+		ChainId:       signerData.ChainID,
+		Sequence:      signerData.Sequence,
+		Memo:          body.Memo,
+		Msgs:          txData.Body.Messages,
+		Fee:           fee,
 	}
 
 	return h.encoder.Marshal(signDoc)

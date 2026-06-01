@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"sort"
 
 	proto "github.com/cosmos/gogoproto/proto"
@@ -96,7 +95,9 @@ func SanitizeGenesisAccounts(genAccs GenesisAccounts) GenesisAccounts {
 	for num := range dupAccNum {
 		dupAccNums = append(dupAccNums, num)
 	}
-	slices.Sort(dupAccNums)
+	sort.Slice(dupAccNums, func(i, j int) bool {
+		return dupAccNums[i] < dupAccNums[j]
+	})
 
 	// Change the account number of the duplicated ones to the first unused value.
 	globalNum := uint64(0)

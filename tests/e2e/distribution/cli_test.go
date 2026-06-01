@@ -1,4 +1,5 @@
 //go:build e2e
+// +build e2e
 
 package distribution
 
@@ -9,13 +10,13 @@ import (
 )
 
 func TestE2ETestSuite(t *testing.T) {
-	suite.Run(t, NewE2ETestSuite())
+	suite.Run(t, new(E2ETestSuite))
 }
 
 func TestGRPCQueryTestSuite(t *testing.T) {
-	suite.Run(t, NewGRPCQueryTestSuite())
+	suite.Run(t, new(GRPCQueryTestSuite))
 }
 
 func TestWithdrawAllSuite(t *testing.T) {
-	suite.Run(t, NewWithdrawAllTestSuite())
+	suite.Run(t, new(WithdrawAllTestSuite))
 }

@@ -20,11 +20,13 @@ cp ../x/auth/vesting/README.md ./docs/build/modules/auth/1-vesting.md
 cp ../x/auth/tx/README.md ./docs/build/modules/auth/2-tx.md
 
 ## Add modules page list
-cat ../x/README.md | sed 's/\.\.\/docs\/build\/building-modules\/README\.md/\/building-modules\/intro\.html/g' > ./docs/build/modules/README.md
+cat ../x/README.md | sed 's/\.\.\/docs\/build\/building-modules\/README\.md/\/building-modules\/intro\.html/g' > ./docs/modules/README.md
 
 ## Add tooling documentation
 cp ../tools/cosmovisor/README.md ./docs/build/tooling/01-cosmovisor.md
 cp ../tools/confix/README.md ./docs/build/tooling/02-confix.md
+cp ../tools/hubl/README.md ./docs/build/tooling/03-hubl.md
+wget -O docs/user/run-node/04-rosetta.md https://raw.githubusercontent.com/cosmos/rosetta/main/README.md
 
 ## Add package documentation
 cp ../client/v2/README.md ./docs/learn/advanced/17-autocli.md
@@ -41,4 +43,4 @@ cp -r ./spec ./docs/build
 cp -r ./rfc ./docs/build/rfc
 
 ## Add SDK migration documentation
-cp -r ../UPGRADING.md ./docs/build/migrations/02-upgrade-reference.md
+cp -r ../UPGRADING.md ./docs/build/migrations/02-upgrading.md

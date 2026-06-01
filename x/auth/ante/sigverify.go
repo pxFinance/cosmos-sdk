@@ -5,11 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"google.golang.org/protobuf/types/known/anypb"
 
 	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+	txsigning "cosmossdk.io/x/tx/signing"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
@@ -18,13 +19,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256r1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/crypto/types/multisig"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
 )
 
 var (
@@ -35,7 +34,7 @@ var (
 )
 
 func init() {
-	// This decodes a valid hex string into a secp256k1Pubkey for use in transaction simulation
+	// This decodes a valid hex string into a sepc256k1Pubkey for use in transaction simulation
 	bz, _ := hex.DecodeString("035AD6810A47F073553FF30D2FCC7E0D3B1C0B74B61A1AAA2582344037151E143A")
 	copy(key, bz)
 	simSecp256k1Pubkey.Key = key
@@ -100,7 +99,7 @@ func (spkd SetPubKeyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 		if err != nil {
 			return ctx, err
 		}
-		// account already has pubkey set, no need to reset
+		// account already has pubkey set,no need to reset
 		if acc.GetPubKey() != nil {
 			continue
 		}
@@ -120,21 +119,11 @@ func (spkd SetPubKeyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 		return ctx, err
 	}
 
-	isUnordered := false
-	utx, ok := tx.(sdk.TxWithUnordered)
-	if ok && utx.GetUnordered() {
-		isUnordered = true
-	}
-
 	var events sdk.Events
 	for i, sig := range sigs {
-		// this shouldn't happen, but if we somehow got a tx with both a sequence set, and is unordered,
-		// we shouldn't emit the event, as this is a false sequence, and won't actually be used.
-		if !isUnordered {
-			events = append(events, sdk.NewEvent(sdk.EventTypeTx,
-				sdk.NewAttribute(sdk.AttributeKeyAccountSequence, fmt.Sprintf("%s/%d", signerStrs[i], sig.Sequence)),
-			))
-		}
+		events = append(events, sdk.NewEvent(sdk.EventTypeTx,
+			sdk.NewAttribute(sdk.AttributeKeyAccountSequence, fmt.Sprintf("%s/%d", signerStrs[i], sig.Sequence)),
+		))
 
 		sigBzs, err := signatureDataToBz(sig.Data)
 		if err != nil {
@@ -152,7 +141,7 @@ func (spkd SetPubKeyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 	return next(ctx, tx, simulate)
 }
 
-// SigGasConsumeDecorator consumes parameter-defined amount of gas for each signature according to the passed-in SignatureVerificationGasConsumer function
+// Consume parameter-defined amount of gas for each signature according to the passed-in SignatureVerificationGasConsumer function
 // before calling the next AnteHandler
 // CONTRACT: Pubkeys are set in context for all signers before this decorator runs
 // CONTRACT: Tx must implement SigVerifiableTx interface
@@ -223,63 +212,21 @@ func (sgcd SigGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 	return next(ctx, tx, simulate)
 }
 
-// SigVerificationDecorator verifies all signatures for a tx and returns an error if any are invalid.
-// Note, the SigVerificationDecorator will not check signatures on ReCheck.
-//
-// As of Cosmos SDK v0.53.0, the SigVerificationDecorator will also verify the validity of unordered transactions.
-// This involves ensuring the TTL is valid, and that the unordered nonce has not been used previously.
+// SigVerificationDecorator verifies all signatures for a tx and return an error if any are invalid. Note,
+// the SigVerificationDecorator will not check signatures on ReCheck.
 //
 // CONTRACT: Pubkeys are set in context for all signers before this decorator runs
 // CONTRACT: Tx must implement SigVerifiableTx interface
 type SigVerificationDecorator struct {
-	ak                   AccountKeeper
-	signModeHandler      *txsigning.HandlerMap
-	maxTxTimeoutDuration time.Duration
-	unorderedTxGasCost   uint64
+	ak              AccountKeeper
+	signModeHandler *txsigning.HandlerMap
 }
 
-type SigVerificationDecoratorOption func(svd *SigVerificationDecorator)
-
-// WithMaxUnorderedTxTimeoutDuration sets the maximum TTL a transaction can define for unordered transactions.
-func WithMaxUnorderedTxTimeoutDuration(duration time.Duration) SigVerificationDecoratorOption {
-	return func(svd *SigVerificationDecorator) {
-		svd.maxTxTimeoutDuration = duration
+func NewSigVerificationDecorator(ak AccountKeeper, signModeHandler *txsigning.HandlerMap) SigVerificationDecorator {
+	return SigVerificationDecorator{
+		ak:              ak,
+		signModeHandler: signModeHandler,
 	}
-}
-
-// WithUnorderedTxGasCost sets the gas cost for unordered transactions.
-// We must charge extra gas for unordered transactions
-// as they incur extra processing time for cleaning up the expired txs in x/auth PreBlocker.
-// Note: this value was chosen by 2x-ing the cost of fetching and removing an unordered nonce entry.
-func WithUnorderedTxGasCost(gasCost uint64) SigVerificationDecoratorOption {
-	return func(svd *SigVerificationDecorator) {
-		svd.unorderedTxGasCost = gasCost
-	}
-}
-
-const (
-	// DefaultMaxTimeoutDuration defines a default maximum TTL a transaction can define.
-	DefaultMaxTimeoutDuration = 10 * time.Minute
-	// DefaultUnorderedTxGasCost defines a default gas cost for unordered transactions.
-	// We must charge extra gas for unordered transactions
-	// as they incur extra processing time for cleaning up the expired txs in x/auth PreBlocker.
-	// Note: this value was chosen by 2x-ing the cost of fetching and removing an unordered nonce entry.
-	DefaultUnorderedTxGasCost = uint64(2240)
-)
-
-func NewSigVerificationDecorator(ak AccountKeeper, signModeHandler *txsigning.HandlerMap, opts ...SigVerificationDecoratorOption) SigVerificationDecorator {
-	svd := SigVerificationDecorator{
-		ak:                   ak,
-		signModeHandler:      signModeHandler,
-		maxTxTimeoutDuration: DefaultMaxTimeoutDuration,
-		unorderedTxGasCost:   DefaultUnorderedTxGasCost,
-	}
-
-	for _, opt := range opts {
-		opt(&svd)
-	}
-
-	return svd
 }
 
 // OnlyLegacyAminoSigners checks SignatureData to see if all
@@ -309,14 +256,6 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 		return ctx, errorsmod.Wrap(sdkerrors.ErrTxDecode, "invalid transaction type")
 	}
 
-	utx, ok := tx.(sdk.TxWithUnordered)
-	isUnordered := ok && utx.GetUnordered()
-	unorderedEnabled := svd.ak.UnorderedTransactionsEnabled()
-
-	if isUnordered && !unorderedEnabled {
-		return ctx, errorsmod.Wrap(sdkerrors.ErrNotSupported, "unordered transactions are not enabled")
-	}
-
 	// stdSigs contains the sequence number, account number, and signatures.
 	// When simulating, this would just be a 0-length slice.
 	sigs, err := sigTx.GetSignaturesV2()
@@ -334,19 +273,7 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 		return ctx, errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "invalid number of signer;  expected: %d, got %d", len(signers), len(sigs))
 	}
 
-	// In normal transactions, each signer has a sequence value. In unordered transactions, the nonce value is at the tx body level,
-	// so we get one nonce value for all the signers, rather than a sequence value for each signer.
-	// Because of this, we verify the unordered nonce outside the sigs loop, to avoid verifying the same nonce multiple times.
-	if isUnordered {
-		if err := svd.verifyUnorderedNonce(ctx, utx); err != nil {
-			return ctx, err
-		}
-	}
-
 	for i, sig := range sigs {
-		if sig.Sequence > 0 && isUnordered {
-			return ctx, errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "sequence is not allowed for unordered transactions")
-		}
 		acc, err := GetSignerAcc(ctx, svd.ak, signers[i])
 		if err != nil {
 			return ctx, err
@@ -359,13 +286,11 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 		}
 
 		// Check account sequence number.
-		if !isUnordered {
-			if sig.Sequence != acc.GetSequence() {
-				return ctx, errorsmod.Wrapf(
-					sdkerrors.ErrWrongSequence,
-					"account sequence mismatch, expected %d, got %d", acc.GetSequence(), sig.Sequence,
-				)
-			}
+		if sig.Sequence != acc.GetSequence() {
+			return ctx, errorsmod.Wrapf(
+				sdkerrors.ErrWrongSequence,
+				"account sequence mismatch, expected %d, got %d", acc.GetSequence(), sig.Sequence,
+			)
 		}
 
 		// retrieve signer data
@@ -384,7 +309,7 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 				Address:       acc.GetAddress().String(),
 				ChainID:       chainID,
 				AccountNumber: accNum,
-				Sequence:      sig.Sequence,
+				Sequence:      acc.GetSequence(),
 				PubKey: &anypb.Any{
 					TypeUrl: anyPk.TypeUrl,
 					Value:   anyPk.Value,
@@ -406,74 +331,12 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 					errMsg = fmt.Sprintf("signature verification failed; please verify account number (%d) and chain-id (%s): (%s)", accNum, chainID, err.Error())
 				}
 				return ctx, errorsmod.Wrap(sdkerrors.ErrUnauthorized, errMsg)
+
 			}
 		}
 	}
 
 	return next(ctx, tx, simulate)
-}
-
-// verifyUnorderedNonce verifies the unordered nonce of an unordered transaction.
-// This checks that:
-// 1. The unordered transaction's timeout timestamp is set.
-// 2. The unordered transaction's timeout timestamp is not in the past.
-// 3. The unordered transaction's timeout timestamp is not more than the max TTL.
-// 4. The unordered transaction's nonce has not been used previously.
-//
-// If all the checks above pass, the nonce is marked as used for each signer of the transaction.
-func (svd SigVerificationDecorator) verifyUnorderedNonce(ctx sdk.Context, unorderedTx sdk.TxWithUnordered) error {
-	blockTime := ctx.BlockTime()
-	timeoutTimestamp := unorderedTx.GetTimeoutTimeStamp()
-	if timeoutTimestamp.IsZero() || timeoutTimestamp.Unix() == 0 {
-		return errorsmod.Wrap(
-			sdkerrors.ErrInvalidRequest,
-			"unordered transaction must have timeout_timestamp set",
-		)
-	}
-	if timeoutTimestamp.Before(blockTime) {
-		return errorsmod.Wrap(
-			sdkerrors.ErrInvalidRequest,
-			"unordered transaction has a timeout_timestamp that has already passed",
-		)
-	}
-	if timeoutTimestamp.After(blockTime.Add(svd.maxTxTimeoutDuration)) {
-		return errorsmod.Wrapf(
-			sdkerrors.ErrInvalidRequest,
-			"unordered tx ttl exceeds %s",
-			svd.maxTxTimeoutDuration.String(),
-		)
-	}
-
-	ctx.GasMeter().ConsumeGas(svd.unorderedTxGasCost, "unordered tx")
-
-	execMode := ctx.ExecMode()
-	if execMode == sdk.ExecModeSimulate {
-		return nil
-	}
-
-	signerAddrs, err := extractSignersBytes(unorderedTx)
-	if err != nil {
-		return err
-	}
-
-	for _, signerAddr := range signerAddrs {
-		if err := svd.ak.TryAddUnorderedNonce(ctx, signerAddr, unorderedTx.GetTimeoutTimeStamp()); err != nil {
-			return errorsmod.Wrapf(
-				sdkerrors.ErrInvalidRequest,
-				"failed to add unordered nonce: %s", err,
-			)
-		}
-	}
-
-	return nil
-}
-
-func extractSignersBytes(tx sdk.Tx) ([][]byte, error) {
-	sigTx, ok := tx.(authsigning.SigVerifiableTx)
-	if !ok {
-		return nil, errorsmod.Wrap(sdkerrors.ErrTxDecode, "invalid tx type")
-	}
-	return sigTx.GetSigners()
 }
 
 // IncrementSequenceDecorator handles incrementing sequences of all signers.
@@ -482,7 +345,7 @@ func extractSignersBytes(tx sdk.Tx) ([][]byte, error) {
 // BaseApp.Commit() will set the check state based on the latest header.
 //
 // NOTE: Since CheckTx and DeliverTx state are managed separately, subsequent and
-// sequential txs originating from the same account cannot be handled correctly in
+// sequential txs orginating from the same account cannot be handled correctly in
 // a reliable way unless sequence numbers are managed and tracked manually by a
 // client. It is recommended to instead use multiple messages in a tx.
 type IncrementSequenceDecorator struct {
@@ -496,25 +359,25 @@ func NewIncrementSequenceDecorator(ak AccountKeeper) IncrementSequenceDecorator 
 }
 
 func (isd IncrementSequenceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	if utx, ok := tx.(sdk.TxWithUnordered); ok && utx.GetUnordered() {
-		if !isd.ak.UnorderedTransactionsEnabled() {
-			return ctx, errorsmod.Wrap(sdkerrors.ErrNotSupported, "unordered transactions are disabled")
-		}
-		return next(ctx, tx, simulate)
-	}
 	sigTx, ok := tx.(authsigning.SigVerifiableTx)
 	if !ok {
 		return ctx, errorsmod.Wrap(sdkerrors.ErrTxDecode, "invalid transaction type")
 	}
 
-	// increment sequence of all signers
+	feeTx, isFeeTx := tx.(sdk.FeeTx)
 	signers, err := sigTx.GetSigners()
 	if err != nil {
 		return sdk.Context{}, err
 	}
 
-	for _, signer := range signers {
-		acc := isd.ak.GetAccount(ctx, signer)
+	// increment sequence of all signers, except for fee payers
+	for _, addr := range signers {
+		// skip sequence increment of fee payer, when multiple signers exist
+		if isFeeTx && len(signers) > 1 && bytes.Equal(feeTx.FeePayer(), addr) {
+			continue
+		}
+
+		acc := isd.ak.GetAccount(ctx, addr)
 		if err := acc.SetSequence(acc.GetSequence() + 1); err != nil {
 			panic(err)
 		}
@@ -573,7 +436,7 @@ func DefaultSigVerificationGasConsumer(
 	switch pubkey := pubkey.(type) {
 	case *ed25519.PubKey:
 		meter.ConsumeGas(params.SigVerifyCostED25519, "ante verify: ed25519")
-		return nil
+		return errorsmod.Wrap(sdkerrors.ErrInvalidPubKey, "ED25519 public keys are unsupported")
 
 	case *secp256k1.PubKey:
 		meter.ConsumeGas(params.SigVerifyCostSecp256k1, "ante verify: secp256k1")
@@ -607,7 +470,7 @@ func ConsumeMultisignatureVerificationGas(
 	size := sig.BitArray.Count()
 	sigIndex := 0
 
-	for i := range size {
+	for i := 0; i < size; i++ {
 		if !sig.BitArray.GetIndex(i) {
 			continue
 		}
@@ -637,7 +500,7 @@ func GetSignerAcc(ctx sdk.Context, ak AccountKeeper, addr sdk.AccAddress) (sdk.A
 }
 
 // CountSubKeys counts the total number of keys for a multi-sig public key.
-// A non-multisig, i.e. a regular signature, it naturally has a count of 1. If it is a multisig,
+// A non-multisig, i.e. a regular signature, it naturally a count of 1. If it is a multisig,
 // then it recursively calls it on its pubkeys.
 func CountSubKeys(pub cryptotypes.PubKey) int {
 	if pub == nil {

@@ -308,6 +308,7 @@ func (s *E2ETestSuite) TestCmdRevokeAuthorizations() {
 		},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdRevokeAuthorization(addresscodec.NewBech32Codec("cosmos"))
 			clientCtx := val.ClientCtx
@@ -454,6 +455,7 @@ func (s *E2ETestSuite) TestNewExecGenericAuthorized() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx
@@ -559,6 +561,7 @@ func (s *E2ETestSuite) TestNewExecGrantAuthorized() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx
@@ -567,9 +570,9 @@ func (s *E2ETestSuite) TestNewExecGrantAuthorized() {
 			out, err := clitestutil.ExecTestCLICmd(clientCtx, cmd, tc.args)
 			switch {
 			case tc.expectErrMsg != "":
-				s.Require().NoError(clientCtx.Codec.UnmarshalJSON(out.Bytes(), &response), out.String())
-				s.Require().Contains(response.RawLog, tc.expectErrMsg)
-
+				// workaround to check error code since CometBFT v1.0.1 CheckTx errors are propagated.
+				// see https://github.com/cometbft/cometbft/pull/4040
+				s.Require().Contains(out.String(), tc.expectErrMsg)
 			case tc.expectErr:
 				s.Require().Error(err)
 
@@ -757,6 +760,7 @@ func (s *E2ETestSuite) TestExecDelegateAuthorization() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx
@@ -823,6 +827,7 @@ func (s *E2ETestSuite) TestExecDelegateAuthorization() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx
@@ -980,6 +985,7 @@ func (s *E2ETestSuite) TestExecUndelegateAuthorization() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx
@@ -1047,6 +1053,7 @@ func (s *E2ETestSuite) TestExecUndelegateAuthorization() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := cli.NewCmdExecAuthorization()
 			clientCtx := val.ClientCtx

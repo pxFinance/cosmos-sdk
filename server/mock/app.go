@@ -15,13 +15,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
 
 	bam "github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/testutil"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 )
@@ -69,7 +69,7 @@ func NewApp(rootDir string, logger log.Logger) (servertypes.ABCI, error) {
 }
 
 // KVStoreHandler is a simple handler that takes KVStoreTx and writes
-// it to the db.
+// them to the db.
 func KVStoreHandler(storeKey storetypes.StoreKey) bam.MsgServiceHandler {
 	return func(ctx sdk.Context, msg sdk.Msg) (*sdk.Result, error) {
 		dTx, ok := msg.(*KVStoreTx)
@@ -89,32 +89,34 @@ func KVStoreHandler(storeKey storetypes.StoreKey) bam.MsgServiceHandler {
 	}
 }
 
+// basic KV structure
 type KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
+// What Genesis JSON is formatted as
 type GenesisJSON struct {
 	Values []KV `json:"values"`
 }
 
 // InitChainer returns a function that can initialize the chain
 // with key/value pairs
-func InitChainer(key storetypes.StoreKey) func(sdk.Context, *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
-	return func(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+func InitChainer(key storetypes.StoreKey) func(sdk.Context, *abci.InitChainRequest) (*abci.InitChainResponse, error) {
+	return func(ctx sdk.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
 		stateJSON := req.AppStateBytes
 
 		genesisState := new(GenesisJSON)
 		err := json.Unmarshal(stateJSON, genesisState)
 		if err != nil {
-			return &abci.ResponseInitChain{}, err
+			return &abci.InitChainResponse{}, err
 		}
 
 		for _, val := range genesisState.Values {
 			store := ctx.KVStore(key)
 			store.Set([]byte(val.Key), []byte(val.Value))
 		}
-		return &abci.ResponseInitChain{}, nil
+		return &abci.InitChainResponse{}, nil
 	}
 }
 
@@ -133,17 +135,16 @@ func AppGenState(_ *codec.LegacyAmino, _ genutiltypes.AppGenesis, _ []json.RawMe
     }
   ]
 }`)
-	return appState, err
+	return
 }
 
 // AppGenStateEmpty returns an empty transaction state for mocking.
 func AppGenStateEmpty(_ *codec.LegacyAmino, _ genutiltypes.AppGenesis, _ []json.RawMessage) (appState json.RawMessage, err error) {
 	appState = json.RawMessage(``)
-	return appState, err
+	return
 }
 
 // Manually write the handlers for this custom message
-
 type MsgServer interface {
 	Test(ctx context.Context, msg *KVStoreTx) (*sdk.Result, error)
 }
@@ -152,7 +153,7 @@ type MsgServerImpl struct {
 	capKeyMainStore *storetypes.KVStoreKey
 }
 
-func MsgTestHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+func MsgTestHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) { // nolint: revive // refactor this in a followup pr
 	in := new(KVStoreTx)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -164,7 +165,7 @@ func MsgTestHandler(srv any, ctx context.Context, dec func(any) error, intercept
 		Server:     srv,
 		FullMethod: "/KVStoreTx",
 	}
-	handler := func(ctx context.Context, req any) (any, error) {
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MsgServer).Test(ctx, req.(*KVStoreTx))
 	}
 	return interceptor(ctx, in, info, handler)

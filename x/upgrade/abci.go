@@ -6,12 +6,12 @@ import (
 	"fmt"
 
 	"cosmossdk.io/core/appmodule"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/upgrade/keeper"
+	"cosmossdk.io/x/upgrade/types"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
-	"github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 // PreBlocker will check if there is a scheduled plan and if it is ready to be executed.
@@ -22,10 +22,8 @@ import (
 // The purpose is to ensure the binary is switched EXACTLY at the desired block, and to allow
 // a migration to be executed if needed upon this switch (migration defined in the new binary)
 // skipUpgradeHeightArray is a set of block heights for which the upgrade must be skipped
-//
-// Note: The MetricKey will change to MetricKeyPreBlocker in v0.54.0.
 func PreBlocker(ctx context.Context, k *keeper.Keeper) (appmodule.ResponsePreBlock, error) {
-	defer telemetry.ModuleMeasureSince(types.ModuleName, telemetry.Now(), telemetry.MetricKeyPreBlocker) //nolint:staticcheck // TODO: switch to OpenTelemetry
+	defer telemetry.ModuleMeasureSince(types.ModuleName, telemetry.Now(), telemetry.MetricKeyBeginBlocker)
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	blockHeight := sdkCtx.HeaderInfo().Height

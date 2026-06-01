@@ -73,7 +73,7 @@ func (a SendAuthorization) ValidateBasic() error {
 	}
 
 	found := make(map[string]bool, 0)
-	for i := range a.AllowList {
+	for i := 0; i < len(a.AllowList); i++ {
 		if found[a.AllowList[i]] {
 			return ErrDuplicateEntry
 		}

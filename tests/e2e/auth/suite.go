@@ -106,6 +106,7 @@ func (s *E2ETestSuite) TestCLISignGenOnly() {
 		fmt.Sprintf("--%s=true", flags.FlagGenerateOnly), // shouldn't break if we use keyname with --generate-only flag
 		fmt.Sprintf("--%s=true", flags.FlagSkipConfirmation),
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
+		fmt.Sprintf("--%s=%s", flags.FlagFees, "10stake"),
 	}
 	generatedStd, err := clitestutil.ExecTestCLICmd(val.ClientCtx, bank.NewSendTxCmd(addresscodec.NewBech32Codec("cosmos")), args)
 	s.Require().NoError(err)
@@ -340,6 +341,7 @@ func (s *E2ETestSuite) TestCLIQueryTxCmdByHash() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := authcli.QueryTxCmd()
 			clientCtx := val.ClientCtx
@@ -469,6 +471,7 @@ func (s *E2ETestSuite) TestCLIQueryTxCmdByEvents() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := authcli.QueryTxCmd()
 			clientCtx := val.ClientCtx
@@ -546,6 +549,7 @@ func (s *E2ETestSuite) TestCLIQueryTxsCmdByEvents() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			cmd := authcli.QueryTxsByEventsCmd()
 			clientCtx := val.ClientCtx
@@ -835,7 +839,7 @@ func (s *E2ETestSuite) TestCLIMultisignSortSignatures() {
 	var balRes banktypes.QueryAllBalancesResponse
 	err = val1.ClientCtx.Codec.UnmarshalJSON(resp, &balRes)
 	s.Require().NoError(err)
-	initialCoins := balRes.Balances
+	intialCoins := balRes.Balances
 
 	// Send coins from validator to multisig.
 	sendTokens := sdk.NewInt64Coin(s.cfg.BondDenom, 10)
@@ -851,7 +855,7 @@ func (s *E2ETestSuite) TestCLIMultisignSortSignatures() {
 	s.Require().NoError(err)
 	err = val1.ClientCtx.Codec.UnmarshalJSON(resp, &balRes)
 	s.Require().NoError(err)
-	diff, _ := balRes.Balances.SafeSub(initialCoins...)
+	diff, _ := balRes.Balances.SafeSub(intialCoins...)
 	s.Require().Equal(sendTokens.Amount, diff.AmountOf(s.cfg.BondDenom))
 
 	// Generate multisig transaction.
@@ -1150,6 +1154,7 @@ func (s *E2ETestSuite) TestMultisignBatch() {
 	s.Require().NoError(err)
 	// Send coins from validator to multisig.
 	sendTokens := sdk.NewInt64Coin(s.cfg.BondDenom, 1000)
+	s.Require().NoError(s.network.WaitForNextBlock())
 	_, err = s.createBankMsg(
 		val,
 		addr,
@@ -1310,14 +1315,12 @@ func (s *E2ETestSuite) TestTxWithoutPublicKey() {
 	signedTxFile := testutil.WriteToNewTempFile(s.T(), string(txJSON))
 	defer signedTxFile.Close()
 	s.Require().True(strings.Contains(string(txJSON), "\"public_key\":null"))
-
 	// Broadcast tx, test that it shouldn't panic.
 	val1.ClientCtx.BroadcastMode = flags.BroadcastSync
-	out, err := authclitestutil.TxBroadcastExec(val1.ClientCtx, signedTxFile.Name())
-	s.Require().NoError(err)
-	var res sdk.TxResponse
-	s.Require().NoError(val1.ClientCtx.Codec.UnmarshalJSON(out.Bytes(), &res))
-	s.Require().NotEqual(0, res.Code)
+	_, err = authclitestutil.TxBroadcastExec(val1.ClientCtx, signedTxFile.Name())
+	// returns an error since CometBFT v1.0.1 propagates CheckTx errors.
+	// See https://github.com/cometbft/cometbft/pull/4040
+	s.Require().Contains(err.Error(), "broadcast error on transaction validation")
 }
 
 // TestSignWithMultiSignersAminoJSON tests the case where a transaction with 2
@@ -1336,10 +1339,10 @@ func (s *E2ETestSuite) TestSignWithMultiSignersAminoJSON() {
 	// because DIRECT doesn't support multi signers via the CLI.
 	// Since we use amino, we don't need to pre-populate signer_infos.
 	txBuilder := val0.ClientCtx.TxConfig.NewTxBuilder()
-	require.NoError(txBuilder.SetMsgs(
+	txBuilder.SetMsgs(
 		banktypes.NewMsgSend(val0.Address, addr1, sdk.NewCoins(val0Coin)),
 		banktypes.NewMsgSend(val1.Address, addr1, sdk.NewCoins(val1Coin)),
-	))
+	)
 	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(s.cfg.BondDenom, math.NewInt(10))))
 	txBuilder.SetGasLimit(testdata.NewTestGasLimit() * 2)
 	signers, err := txBuilder.GetTx().GetSigners()
@@ -1414,7 +1417,7 @@ func (s *E2ETestSuite) TestAuxSigner() {
 			true,
 		},
 		{
-			"no error with SIGN_MODE_DIRECT_AUX mode and generate-only set (ignores generate-only)",
+			"no error with SIGN_MDOE_DIRECT_AUX mode and generate-only set (ignores generate-only)",
 			[]string{
 				fmt.Sprintf("--%s=%s", flags.FlagSignMode, flags.SignModeDirectAux),
 				fmt.Sprintf("--%s=true", flags.FlagGenerateOnly),
@@ -1422,7 +1425,7 @@ func (s *E2ETestSuite) TestAuxSigner() {
 			false,
 		},
 		{
-			"no error with SIGN_MODE_DIRECT_AUX mode and generate-only, tip flag set",
+			"no error with SIGN_MDOE_DIRECT_AUX mode and generate-only, tip flag set",
 			[]string{
 				fmt.Sprintf("--%s=%s", flags.FlagSignMode, flags.SignModeDirectAux),
 				fmt.Sprintf("--%s=true", flags.FlagGenerateOnly),
@@ -1433,6 +1436,7 @@ func (s *E2ETestSuite) TestAuxSigner() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			_, err := govtestutil.MsgSubmitLegacyProposal(
 				val.ClientCtx,
@@ -1654,6 +1658,7 @@ func (s *E2ETestSuite) TestAuxToFeeWithTips() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			res, err := govtestutil.MsgSubmitLegacyProposal(
 				val.ClientCtx,

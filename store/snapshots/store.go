@@ -15,9 +15,8 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 
 	"cosmossdk.io/errors"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/snapshots/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/snapshots/types"
+	storetypes "cosmossdk.io/store/types"
 )
 
 const (
@@ -92,7 +91,7 @@ func (s *Store) Get(height uint64, format uint32) (*types.Snapshot, error) {
 	return snapshot, nil
 }
 
-// GetLatest fetches the latest snapshot from the database, if any.
+// Get fetches the latest snapshot from the database, if any.
 func (s *Store) GetLatest() (*types.Snapshot, error) {
 	iter, err := s.db.ReverseIterator(encodeKey(0, 0), encodeKey(uint64(math.MaxUint64), math.MaxUint32))
 	if err != nil {

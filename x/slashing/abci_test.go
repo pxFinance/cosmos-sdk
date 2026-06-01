@@ -5,11 +5,11 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -43,7 +43,7 @@ func TestBeginBlocker(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx := app.NewContext(false)
+	ctx := app.BaseApp.NewContext(false)
 
 	pks := simtestutil.CreateTestPubKeys(1)
 	simtestutil.AddTestAddrsFromPubKeys(bankKeeper, stakingKeeper, ctx, pks, stakingKeeper.TokensFromConsensusPower(ctx, 200))
@@ -53,8 +53,7 @@ func TestBeginBlocker(t *testing.T) {
 	// bond the validator
 	power := int64(100)
 	amt := tstaking.CreateValidatorWithValPower(addr, pk, power, true)
-	_, err = stakingKeeper.EndBlocker(ctx)
-	require.NoError(t, err)
+	stakingKeeper.EndBlocker(ctx)
 	bondDenom, err := stakingKeeper.BondDenom(ctx)
 	require.NoError(t, err)
 	require.Equal(
@@ -63,7 +62,7 @@ func TestBeginBlocker(t *testing.T) {
 	)
 	val, err := stakingKeeper.Validator(ctx, addr)
 	require.NoError(t, err)
-	require.Equal(t, amt, val.GetValidatorPower())
+	require.Equal(t, amt, val.GetBondedTokens())
 
 	abciVal := abci.Validator{
 		Address: pk.Address(),

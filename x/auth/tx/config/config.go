@@ -14,6 +14,8 @@ import (
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/depinject"
+	txsigning "cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/tx/signing/textual"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -27,8 +29,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/textual"
 )
 
 func init() {
@@ -165,7 +165,7 @@ func newAnteHandler(txConfig client.TxConfig, in ModuleInputs) (sdk.AnteHandler,
 // NewBankKeeperCoinMetadataQueryFn creates a new Textual struct using the given
 // BankKeeper to retrieve coin metadata.
 //
-// This function should be used in the server (app.go) and is already injected thanks to app wiring for app_di.
+// This function should be used in the server (app.go) and is already injected thanks to app wiring for app_v2.
 func NewBankKeeperCoinMetadataQueryFn(bk BankKeeper) textual.CoinMetadataQueryFn {
 	return func(ctx context.Context, denom string) (*bankv1beta1.Metadata, error) {
 		res, err := bk.DenomMetadata(ctx, &types.QueryDenomMetadataRequest{Denom: denom})

@@ -19,7 +19,7 @@ import (
 )
 
 // TestRandomizedGenState tests the normal scenario of applying RandomizedGenState.
-// Abnormal scenarios are not tested here.
+// Abonormal scenarios are not tested here.
 func TestRandomizedGenState(t *testing.T) {
 	encCfg := moduletestutil.MakeTestEncodingConfig(mint.AppModuleBasic{})
 

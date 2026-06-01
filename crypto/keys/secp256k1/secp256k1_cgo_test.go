@@ -1,4 +1,5 @@
 //go:build libsecp256k1_sdk
+// +build libsecp256k1_sdk
 
 package secp256k1
 
@@ -6,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/magiconair/properties/assert"
+
 	"github.com/stretchr/testify/require"
 )
 

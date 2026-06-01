@@ -1,8 +1,14 @@
 package gaskv
 
 import (
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"errors"
+	"io"
+
+	"cosmossdk.io/store/types"
 )
+
+// ObjectValueLength is the emulated number of bytes for storing transient objects in gas accounting.
+const ObjectValueLength = 16
 
 var _ types.KVStore = &Store{}
 
@@ -10,8 +16,8 @@ type Store = GStore[[]byte]
 
 func NewStore(parent types.KVStore, gasMeter types.GasMeter, gasConfig types.GasConfig) *Store {
 	return NewGStore(parent, gasMeter, gasConfig,
-		types.BytesIsZero,
-		types.BytesValueLen,
+		func(v []byte) bool { return v == nil },
+		func(v []byte) int { return len(v) },
 	)
 }
 
@@ -19,8 +25,8 @@ type ObjStore = GStore[any]
 
 func NewObjStore(parent types.ObjKVStore, gasMeter types.GasMeter, gasConfig types.GasConfig) *ObjStore {
 	return NewGStore(parent, gasMeter, gasConfig,
-		types.AnyIsZero,
-		types.AnyValueLen,
+		func(v any) bool { return v == nil },
+		func(v any) int { return ObjectValueLength },
 	)
 }
 
@@ -53,13 +59,12 @@ func NewGStore[V any](
 	return kvs
 }
 
-// GetStoreType implements Store, consuming no gas and returning the underlying
-// store's type.
+// Implements Store.
 func (gs *GStore[V]) GetStoreType() types.StoreType {
 	return gs.parent.GetStoreType()
 }
 
-// Get implements KVStore, consuming gas based on ReadCostFlat and the read per bytes cost.
+// Implements KVStore.
 func (gs *GStore[V]) Get(key []byte) (value V) {
 	gs.gasMeter.ConsumeGas(gs.gasConfig.ReadCostFlat, types.GasReadCostFlatDesc)
 	value = gs.parent.Get(key)
@@ -71,7 +76,7 @@ func (gs *GStore[V]) Get(key []byte) (value V) {
 	return value
 }
 
-// Set implements KVStore, consuming gas based on WriteCostFlat and the write per bytes cost.
+// Implements KVStore.
 func (gs *GStore[V]) Set(key []byte, value V) {
 	types.AssertValidKey(key)
 	types.AssertValidValueGeneric(value, gs.isZero, gs.valueLen)
@@ -82,13 +87,13 @@ func (gs *GStore[V]) Set(key []byte, value V) {
 	gs.parent.Set(key, value)
 }
 
-// Has implements KVStore, consuming gas based on HasCost.
+// Implements KVStore.
 func (gs *GStore[V]) Has(key []byte) bool {
 	gs.gasMeter.ConsumeGas(gs.gasConfig.HasCost, types.GasHasDesc)
 	return gs.parent.Has(key)
 }
 
-// Delete implements KVStore consuming gas based on DeleteCost.
+// Implements KVStore.
 func (gs *GStore[V]) Delete(key []byte) {
 	// charge gas to prevent certain attack vectors even though space is being freed
 	gs.gasMeter.ConsumeGas(gs.gasConfig.DeleteCost, types.GasDeleteDesc)
@@ -110,9 +115,14 @@ func (gs *GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
 	return gs.iterator(start, end, false)
 }
 
-// CacheWrap implements KVStore - it PANICS as you cannot cache a GasKVStore.
+// Implements KVStore.
 func (gs *GStore[V]) CacheWrap() types.CacheWrap {
 	panic("cannot CacheWrap a GasKVStore")
+}
+
+// CacheWrapWithTrace implements the KVStore interface.
+func (gs *GStore[V]) CacheWrapWithTrace(_ io.Writer, _ types.TraceContext) types.CacheWrap {
+	panic("cannot CacheWrapWithTrace a GasKVStore")
 }
 
 func (gs *GStore[V]) iterator(start, end []byte, ascending bool) types.GIterator[V] {
@@ -122,6 +132,16 @@ func (gs *GStore[V]) iterator(start, end []byte, ascending bool) types.GIterator
 	} else {
 		parent = gs.parent.ReverseIterator(start, end)
 	}
+
+	// release parent open iterator if we panic during consumeSeekGas() and re-panic
+	defer func() {
+		if r := recover(); r != nil {
+			if err := parent.Close(); err != nil {
+				r = errors.Join(r.(error), err)
+			}
+			panic(r)
+		}
+	}()
 
 	gi := newGasIterator(gs.gasMeter, gs.gasConfig, parent, gs.valueLen)
 	gi.consumeSeekGas()
@@ -145,12 +165,12 @@ func newGasIterator[V any](gasMeter types.GasMeter, gasConfig types.GasConfig, p
 	}
 }
 
-// Domain implements Iterator, getting the underlying iterator's domain.
+// Implements Iterator.
 func (gi *gasIterator[V]) Domain() (start, end []byte) {
 	return gi.parent.Domain()
 }
 
-// Valid implements Iterator by checking the underlying iterator.
+// Implements Iterator.
 func (gi *gasIterator[V]) Valid() bool {
 	return gi.parent.Valid()
 }
@@ -176,7 +196,7 @@ func (gi *gasIterator[V]) Value() (value V) {
 	return gi.parent.Value()
 }
 
-// Close implements Iterator by closing the underlying iterator.
+// Implements Iterator.
 func (gi *gasIterator[V]) Close() error {
 	return gi.parent.Close()
 }

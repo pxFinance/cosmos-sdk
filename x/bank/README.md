@@ -125,7 +125,7 @@ aforementioned state:
 
 ## Params
 
-The bank module stores its params in state with the prefix of `0x05`,
+The bank module stores it's params in state with the prefix of `0x05`,
 it can be updated with governance or the address with authority.
 
 * Params: `0x05 | ProtocolBuffer(Params)`
@@ -193,8 +193,7 @@ Restricted permission to mint per module could be achieved by using baseKeeper w
 // between accounts.
 type Keeper interface {
     SendKeeper
-    WithMintCoinsRestriction(types.MintingRestrictionFn) BaseKeeper
-    WithObjStoreKey(storetypes.StoreKey) BaseKeeper
+    WithMintCoinsRestriction(MintingRestrictionFn) BaseKeeper
 
     InitGenesis(context.Context, *types.GenesisState)
     ExportGenesis(context.Context) *types.GenesisState
@@ -206,7 +205,6 @@ type Keeper interface {
     GetDenomMetaData(ctx context.Context, denom string) (types.Metadata, bool)
     HasDenomMetaData(ctx context.Context, denom string) bool
     SetDenomMetaData(ctx context.Context, denomMetaData types.Metadata)
-    GetAllDenomMetaData(ctx context.Context) []types.Metadata
     IterateAllDenomMetaData(ctx context.Context, cb func(types.Metadata) bool)
 
     SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
@@ -217,14 +215,11 @@ type Keeper interface {
     MintCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
     BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 
-    SendCoinsFromAccountToModuleVirtual(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
-    SendCoinsFromModuleToAccountVirtual(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
-    CreditVirtualAccounts(ctx context.Context) error
-    SendCoinsFromVirtual(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error
-    SendCoinsToVirtual(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error
-
     DelegateCoins(ctx context.Context, delegatorAddr, moduleAccAddr sdk.AccAddress, amt sdk.Coins) error
     UndelegateCoins(ctx context.Context, moduleAccAddr, delegatorAddr sdk.AccAddress, amt sdk.Coins) error
+
+    // GetAuthority gets the address capable of executing governance proposal messages. Usually the gov module account.
+    GetAuthority() string
 
     types.QueryServer
 }
@@ -241,8 +236,8 @@ accounts. The send keeper does not alter the total supply (mint or burn coins).
 type SendKeeper interface {
     ViewKeeper
 
-    AppendSendRestriction(restriction types.SendRestrictionFn)
-    PrependSendRestriction(restriction types.SendRestrictionFn)
+    AppendSendRestriction(restriction SendRestrictionFn)
+    PrependSendRestriction(restriction SendRestrictionFn)
     ClearSendRestriction()
 
     InputOutputCoins(ctx context.Context, input types.Input, outputs []types.Output) error
@@ -252,10 +247,9 @@ type SendKeeper interface {
     SetParams(ctx context.Context, params types.Params) error
 
     IsSendEnabledDenom(ctx context.Context, denom string) bool
-    GetSendEnabledEntry(ctx context.Context, denom string) (types.SendEnabled, bool)
     SetSendEnabled(ctx context.Context, denom string, value bool)
     SetAllSendEnabled(ctx context.Context, sendEnableds []*types.SendEnabled)
-    DeleteSendEnabled(ctx context.Context, denoms ...string)
+    DeleteSendEnabled(ctx context.Context, denom string)
     IterateSendEnabledEntries(ctx context.Context, cb func(denom string, sendEnabled bool) (stop bool))
     GetAllSendEnabledEntries(ctx context.Context) []types.SendEnabled
 
@@ -263,9 +257,6 @@ type SendKeeper interface {
     IsSendEnabledCoins(ctx context.Context, coins ...sdk.Coin) error
 
     BlockedAddr(addr sdk.AccAddress) bool
-    GetBlockedAddresses() map[string]bool
-
-    GetAuthority() string
 }
 ```
 
@@ -284,7 +275,7 @@ Both functions compose the provided restriction with any previously provided res
 `PrependSendRestriction` adds the restriction to be run before any previously provided send restrictions.
 The composition will short-circuit when an error is encountered. I.e. if the first one returns an error, the second is not run.
 
-During `SendCoins`, the send restriction is applied before coins are removed from the from address and adding them to the to address.
+During `SendCoins`, the send restriction is applied after coins are removed from the from address, but before adding them to the to address.
 During `InputOutputCoins`, the send restriction is applied after the input coins are removed and once for each output before the funds are added.
 
 A send restriction function should make use of a custom value in the context to allow bypassing that specific restriction.
@@ -1011,7 +1002,7 @@ Example Output:
 
 ### SendEnabled
 
-The `SendEnabled` endpoints allows users to query the SendEnabled entries of the `bank` module.
+The `SendEnabled` enpoints allows users to query the SendEnabled entries of the `bank` module.
 
 Any denominations NOT returned, use the `Params.DefaultSendEnabled` value.
 

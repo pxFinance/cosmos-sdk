@@ -12,12 +12,12 @@ import (
 	"github.com/cosmos/iavl"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/internal/kv"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/wrapper"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/internal/kv"
+	"cosmossdk.io/store/metrics"
+	"cosmossdk.io/store/types"
+	"cosmossdk.io/store/wrapper"
 )
 
 var (
@@ -105,17 +105,17 @@ func TestLoadStore(t *testing.T) {
 	require.Equal(t, string(hcStore.Get([]byte("hello"))), "ciao")
 
 	// Querying a new store at some previous non-pruned height H
-	newHStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDH, DefaultIAVLCacheSize, false)
+	newHStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDH, DefaultIAVLCacheSize, false, metrics.NewNoOpMetrics())
 	require.NoError(t, err)
 	require.Equal(t, string(newHStore.Get([]byte("hello"))), "hallo")
 
 	// Querying a new store at some previous pruned height Hp
-	newHpStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDHp, DefaultIAVLCacheSize, false)
+	newHpStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDHp, DefaultIAVLCacheSize, false, metrics.NewNoOpMetrics())
 	require.NoError(t, err)
 	require.Equal(t, string(newHpStore.Get([]byte("hello"))), "hola")
 
 	// Querying a new store at current height H
-	newHcStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDHc, DefaultIAVLCacheSize, false)
+	newHcStore, err := LoadStore(db, log.NewNopLogger(), types.NewKVStoreKey("test"), cIDHc, DefaultIAVLCacheSize, false, metrics.NewNoOpMetrics())
 	require.NoError(t, err)
 	require.Equal(t, string(newHcStore.Get([]byte("hello"))), "ciao")
 }
@@ -639,6 +639,8 @@ func TestSetInitialVersion(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			db := dbm.NewMemDB()
 			store := tc.storeFn(db)
@@ -661,6 +663,9 @@ func TestCacheWraps(t *testing.T) {
 
 	cacheWrapper := store.CacheWrap()
 	require.IsType(t, &cachekv.Store{}, cacheWrapper)
+
+	cacheWrappedWithTrace := store.CacheWrapWithTrace(nil, nil)
+	require.IsType(t, &cachekv.Store{}, cacheWrappedWithTrace)
 }
 
 func TestChangeSets(t *testing.T) {

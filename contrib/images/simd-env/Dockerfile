@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine AS build
+FROM golang:1.26.2-alpine AS build
 
 RUN apk add build-base git linux-headers
 
@@ -13,7 +13,6 @@ COPY collections/go.mod collections/go.sum /work/collections/
 COPY store/go.mod store/go.sum /work/store/
 COPY log/go.mod log/go.sum /work/log/
 COPY x/tx/go.mod x/tx/go.sum /work/x/tx/
-
 RUN go mod download
 
 COPY ./ /work

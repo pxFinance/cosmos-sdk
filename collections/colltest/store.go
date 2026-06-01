@@ -5,7 +5,7 @@ import (
 
 	db "github.com/cosmos/cosmos-db"
 
-	store "cosmossdk.io/collections/corecompat"
+	"cosmossdk.io/core/store"
 )
 
 type contextStoreKey struct{}

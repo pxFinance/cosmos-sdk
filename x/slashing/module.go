@@ -15,12 +15,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/testutil/simsx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	"github.com/cosmos/cosmos-sdk/x/slashing/exported"
 	"github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	"github.com/cosmos/cosmos-sdk/x/slashing/simulation"
 	"github.com/cosmos/cosmos-sdk/x/slashing/types"
@@ -76,7 +76,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 	return types.ValidateGenesis(data)
 }
 
-// RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the slashing module.
+// RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the slashig module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *gwruntime.ServeMux) {
 	if err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)); err != nil {
 		panic(err)
@@ -93,6 +93,9 @@ type AppModule struct {
 	accountKeeper types.AccountKeeper
 	bankKeeper    types.BankKeeper
 	stakingKeeper types.StakingKeeper
+
+	// legacySubspace is used solely for migration of x/slashing managed parameters
+	legacySubspace exported.Subspace
 }
 
 // NewAppModule creates a new AppModule object
@@ -102,6 +105,7 @@ func NewAppModule(
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	sk types.StakingKeeper,
+	ss exported.Subspace,
 	registry cdctypes.InterfaceRegistry,
 ) AppModule {
 	return AppModule{
@@ -110,6 +114,7 @@ func NewAppModule(
 		accountKeeper:  ak,
 		bankKeeper:     bk,
 		stakingKeeper:  sk,
+		legacySubspace: ss,
 	}
 }
 
@@ -123,6 +128,19 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
+
+	m := keeper.NewMigrator(am.keeper, am.legacySubspace)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 1 to 2: %v", types.ModuleName, err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 2, m.Migrate2to3); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 2 to 3: %v", types.ModuleName, err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 3, m.Migrate3to4); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 3 to 4: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the slashing module. It returns
@@ -156,7 +174,6 @@ func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
 }
 
 // ProposalMsgs returns msgs used for governance proposals for simulations.
-// migrate to WeightedOperationsX. This method is ignored when WeightedOperationsX exists and will be removed in the future
 func (AppModule) ProposalMsgs(simState module.SimulationState) []simtypes.WeightedProposalMsg {
 	return simulation.ProposalMsgs()
 }
@@ -166,23 +183,12 @@ func (am AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
 	sdr[types.StoreKey] = simulation.NewDecodeStore(am.cdc)
 }
 
-// ProposalMsgsX returns msgs used for governance proposals for simulations.
-func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_update_params", 100), simulation.MsgUpdateParamsFactory())
-}
-
 // WeightedOperations returns the all the slashing module operations with their respective weights.
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	return simulation.WeightedOperations(
 		am.registry, simState.AppParams, simState.Cdc, simState.TxConfig,
 		am.accountKeeper, am.bankKeeper, am.keeper, am.stakingKeeper,
 	)
-}
-
-// WeightedOperationsX registers weighted slashing module operations for simulation.
-func (am AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Registry) {
-	// note: using old keys for backwards compatibility
-	reg.Add(weights.Get("msg_unjail", 20), simulation.MsgUnjailFactory(am.keeper, am.stakingKeeper))
 }
 
 //
@@ -208,6 +214,9 @@ type ModuleInputs struct {
 	AccountKeeper types.AccountKeeper
 	BankKeeper    types.BankKeeper
 	StakingKeeper types.StakingKeeper
+
+	// LegacySubspace is used solely for migration of x/params managed parameters
+	LegacySubspace exported.Subspace `optional:"true"`
 }
 
 type ModuleOutputs struct {
@@ -226,7 +235,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	}
 
 	k := keeper.NewKeeper(in.Cdc, in.LegacyAmino, in.StoreService, in.StakingKeeper, authority.String())
-	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper, in.StakingKeeper, in.Registry)
+	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper, in.StakingKeeper, in.LegacySubspace, in.Registry)
 	return ModuleOutputs{
 		Keeper: k,
 		Module: m,

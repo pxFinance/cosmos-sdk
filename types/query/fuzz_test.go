@@ -7,8 +7,8 @@ import (
 	fuzz "github.com/google/gofuzz"
 
 	"cosmossdk.io/math"
+	"cosmossdk.io/store/prefix"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
 	"github.com/cosmos/cosmos-sdk/types/query"
@@ -40,7 +40,7 @@ func FuzzPagination(f *testing.F) {
 	}
 
 	// 1.5. Use the inprocess fuzzer to mutate variables.
-	for range 1000 {
+	for i := 0; i < 1000; i++ {
 		qr := new(query.PageRequest)
 		gf.Fuzz(qr)
 		seeds = append(seeds, qr)
@@ -57,7 +57,7 @@ func FuzzPagination(f *testing.F) {
 
 	// 3. Setup the keystore.
 	var balances sdk.Coins
-	for i := range 5 {
+	for i := 0; i < 5; i++ {
 		denom := fmt.Sprintf("foo%ddenom", i)
 		balances = append(balances, sdk.NewInt64Coin(denom, int64(100+i)))
 	}

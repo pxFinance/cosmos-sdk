@@ -20,7 +20,7 @@ import (
 )
 
 // TestRandomizedGenState tests the normal scenario of applying RandomizedGenState.
-// Abnormal scenarios are not tested here.
+// Abonormal scenarios are not tested here.
 func TestRandomizedGenState(t *testing.T) {
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
@@ -64,9 +64,9 @@ func TestRandomizedGenState(t *testing.T) {
 	require.Equal(t, "BOND_STATUS_UNBONDED", stakingGenesis.Validators[2].Status.String())
 	require.Equal(t, "1000", stakingGenesis.Validators[2].Tokens.String())
 	require.Equal(t, "1000.000000000000000000", stakingGenesis.Validators[2].DelegatorShares.String())
-	require.Equal(t, "0.292059246265731326", stakingGenesis.Validators[2].Commission.Rate.String())
-	require.Equal(t, "0.330000000000000000", stakingGenesis.Validators[2].Commission.MaxRate.String())
-	require.Equal(t, "0.038337453731274481", stakingGenesis.Validators[2].Commission.MaxChangeRate.String())
+	require.Equal(t, "0.292059246265731326", stakingGenesis.Validators[2].Commission.CommissionRates.Rate.String())
+	require.Equal(t, "0.330000000000000000", stakingGenesis.Validators[2].Commission.CommissionRates.MaxRate.String())
+	require.Equal(t, "0.038337453731274481", stakingGenesis.Validators[2].Commission.CommissionRates.MaxChangeRate.String())
 	require.Equal(t, "1", stakingGenesis.Validators[2].MinSelfDelegation.String())
 }
 
@@ -91,7 +91,7 @@ func TestRandomizedGenState1(t *testing.T) {
 				Rand:      r,
 			}, "invalid memory address or nil pointer dereference"},
 		{
-			// panic => reason: numBonded != len(Accounts)
+			// panic => reason: numBonded != len(Accnounts)
 			module.SimulationState{
 				AppParams:    make(simtypes.AppParams),
 				Cdc:          cdc,

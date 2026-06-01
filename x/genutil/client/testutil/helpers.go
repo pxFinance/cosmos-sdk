@@ -7,7 +7,7 @@ import (
 	cmtcfg "github.com/cometbft/cometbft/config"
 	"github.com/spf13/viper"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -47,7 +47,7 @@ func CreateDefaultCometConfig(rootDir string) (*cmtcfg.Config, error) {
 	cmtcfg.EnsureRoot(rootDir)
 
 	if err := conf.ValidateBasic(); err != nil {
-		return nil, fmt.Errorf("error in config file: %w", err)
+		return nil, fmt.Errorf("error in config file: %v", err)
 	}
 
 	return conf, nil

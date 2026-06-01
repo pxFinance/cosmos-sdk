@@ -13,7 +13,7 @@ import (
 
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
@@ -43,7 +43,7 @@ func TestArmorUnarmorPrivKey(t *testing.T) {
 	// empty string
 	decrypted, algo, err = crypto.UnarmorDecryptPrivKey("", "passphrase")
 	require.Error(t, err)
-	require.True(t, errors.Is(err, io.EOF))
+	require.True(t, errors.Is(io.EOF, err))
 	require.Nil(t, decrypted)
 	require.Empty(t, algo)
 
@@ -165,7 +165,7 @@ func TestArmorInfoBytes(t *testing.T) {
 func TestUnarmorInfoBytesErrors(t *testing.T) {
 	unarmoredBytes, err := crypto.UnarmorInfoBytes("")
 	require.Error(t, err)
-	require.True(t, errors.Is(err, io.EOF))
+	require.True(t, errors.Is(io.EOF, err))
 	require.Nil(t, unarmoredBytes)
 
 	header := map[string]string{
@@ -222,7 +222,7 @@ func TestBcryptLegacyEncryption(t *testing.T) {
 	keyBcrypt = cmtcrypto.Sha256(keyBcrypt)
 
 	// bcrypt + xsalsa20symmetric
-	encBytesBcryptXsalsa20symmetric := xsalsa20symmetric.EncryptSymmetric(privKeyBytes, keyBcrypt)
+	encBytesBcryptXsalsa20symetric := xsalsa20symmetric.EncryptSymmetric(privKeyBytes, keyBcrypt)
 
 	type testCase struct {
 		description string
@@ -236,7 +236,7 @@ func TestBcryptLegacyEncryption(t *testing.T) {
 		},
 		{
 			description: "Bcrypt + xsalsa20symmetric",
-			armor:       crypto.EncodeArmor("TENDERMINT PRIVATE KEY", headerBcrypt, encBytesBcryptXsalsa20symmetric),
+			armor:       crypto.EncodeArmor("TENDERMINT PRIVATE KEY", headerBcrypt, encBytesBcryptXsalsa20symetric),
 		},
 	} {
 		t.Run(scenario.description, func(t *testing.T) {
@@ -254,7 +254,7 @@ func TestBcryptLegacyEncryption(t *testing.T) {
 		"salt": fmt.Sprintf("%X", saltBytes),
 	}
 
-	_, _, err := crypto.UnarmorDecryptPrivKey(crypto.EncodeArmor("TENDERMINT PRIVATE KEY", headerWithoutKdf, encBytesBcryptXsalsa20symmetric), "passphrase")
+	_, _, err := crypto.UnarmorDecryptPrivKey(crypto.EncodeArmor("TENDERMINT PRIVATE KEY", headerWithoutKdf, encBytesBcryptXsalsa20symetric), "passphrase")
 	require.Error(t, err)
 	require.Equal(t, "unrecognized KDF type: wrongKdf", err.Error())
 }

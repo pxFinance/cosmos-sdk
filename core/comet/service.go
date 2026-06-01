@@ -55,13 +55,13 @@ type CommitInfo interface {
 	Votes() VoteInfos
 }
 
-// VoteInfos is an interface to get specific votes in an efficient way
+// VoteInfos is an interface to get specific votes in a efficient way
 type VoteInfos interface {
 	Len() int
 	Get(int) VoteInfo
 }
 
-// BlockIDFlag indicates which BlockID the signature is for
+// BlockIdFlag indicates which BlockID the signature is for
 type BlockIDFlag int32
 
 const (

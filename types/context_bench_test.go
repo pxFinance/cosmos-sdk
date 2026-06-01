@@ -3,16 +3,18 @@ package types_test
 import (
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/testutil"
 )
 
 func BenchmarkContext_KVStore(b *testing.B) {
 	key := types.NewKVStoreKey(b.Name() + "_TestCacheContext")
 
-	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient_"+b.Name()))
+	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient:"+b.Name()))
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_ = ctx.KVStore(key)
 	}
 }
@@ -20,9 +22,10 @@ func BenchmarkContext_KVStore(b *testing.B) {
 func BenchmarkContext_TransientStore(b *testing.B) {
 	key := types.NewKVStoreKey(b.Name() + "_TestCacheContext")
 
-	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient_"+b.Name()))
+	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient:"+b.Name()))
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_ = ctx.TransientStore(key)
 	}
 }
@@ -30,9 +33,10 @@ func BenchmarkContext_TransientStore(b *testing.B) {
 func BenchmarkContext_CacheContext(b *testing.B) {
 	key := types.NewKVStoreKey(b.Name() + "_TestCacheContext")
 
-	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient_"+b.Name()))
+	ctx := testutil.DefaultContext(key, types.NewTransientStoreKey("transient:"+b.Name()))
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_, _ = ctx.CacheContext()
 	}
 }

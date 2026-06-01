@@ -8,15 +8,13 @@ import (
 	"io"
 	"math"
 	"os"
-	"slices"
 	"sort"
 	"sync"
 
 	errorsmod "cosmossdk.io/errors"
-	"cosmossdk.io/log/v2"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/snapshots/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store/snapshots/types"
+	storetypes "cosmossdk.io/store/types"
 )
 
 // Manager manages snapshot and restore operations for an app, making sure only a single
@@ -38,9 +36,8 @@ type Manager struct {
 	store *Store
 	opts  types.SnapshotOptions
 	// multistore is the store from which snapshots are taken.
-	multistore    types.Snapshotter
-	snapAnnouncer types.SnapshotAnnouncer
-	logger        log.Logger
+	multistore types.Snapshotter
+	logger     log.Logger
 
 	mtx               sync.Mutex
 	operation         operation
@@ -71,24 +68,19 @@ const (
 	snapshotMaxItemSize = int(64e6) // SDK has no key/value size limit, so we set an arbitrary limit
 )
 
-var ErrOptsZeroSnapshotInterval = errors.New("snapshot-interval must not be 0")
+var ErrOptsZeroSnapshotInterval = errors.New("snaphot-interval must not be 0")
 
 // NewManager creates a new manager.
 func NewManager(store *Store, opts types.SnapshotOptions, multistore types.Snapshotter, extensions map[string]types.ExtensionSnapshotter, logger log.Logger) *Manager {
 	if extensions == nil {
 		extensions = map[string]types.ExtensionSnapshotter{}
 	}
-	var snapAnnouncer types.SnapshotAnnouncer = noopSnapshotAnnouncer{}
-	if v, ok := multistore.(types.SnapshotAnnouncer); ok {
-		snapAnnouncer = v
-	}
 	return &Manager{
-		store:         store,
-		opts:          opts,
-		multistore:    multistore,
-		snapAnnouncer: snapAnnouncer,
-		extensions:    extensions,
-		logger:        logger,
+		store:      store,
+		opts:       opts,
+		multistore: multistore,
+		extensions: extensions,
+		logger:     logger,
 	}
 }
 
@@ -103,7 +95,7 @@ func (m *Manager) RegisterExtensions(extensions ...types.ExtensionSnapshotter) e
 			return fmt.Errorf("duplicated snapshotter name: %s", name)
 		}
 		if !IsFormatSupported(extension, extension.SnapshotFormat()) {
-			return fmt.Errorf("snapshotter doesn't support its own snapshot format: %s %d", name, extension.SnapshotFormat())
+			return fmt.Errorf("snapshotter don't support it's own snapshot format: %s %d", name, extension.SnapshotFormat())
 		}
 		m.extensions[name] = extension
 	}
@@ -172,7 +164,6 @@ func (m *Manager) Create(height uint64) (*types.Snapshot, error) {
 		return nil, errorsmod.Wrap(storetypes.ErrLogic, "no snapshot store configured")
 	}
 
-	m.snapAnnouncer.AnnounceSnapshotHeight(int64(height))
 	defer m.multistore.PruneSnapshotHeight(int64(height))
 
 	err := m.begin(opSnapshot)
@@ -377,8 +368,11 @@ func (m *Manager) doRestoreSnapshot(snapshot types.Snapshot, chChunks <-chan io.
 		return errorsmod.Wrap(err, "multistore restore")
 	}
 
-	for nextItem.Item != nil {
-
+	for {
+		if nextItem.Item == nil {
+			// end of stream
+			break
+		}
 		metadata := nextItem.GetExtension()
 		if metadata == nil {
 			return errorsmod.Wrapf(storetypes.ErrLogic, "unknown snapshot item %T", nextItem.Item)
@@ -502,7 +496,12 @@ func (m *Manager) sortedExtensionNames() []string {
 
 // IsFormatSupported returns if the snapshotter supports restoration from given format.
 func IsFormatSupported(snapshotter types.ExtensionSnapshotter, format uint32) bool {
-	return slices.Contains(snapshotter.SupportedFormats(), format)
+	for _, i := range snapshotter.SupportedFormats() {
+		if i == format {
+			return true
+		}
+	}
+	return false
 }
 
 // SnapshotIfApplicable takes a snapshot of the current state if we are on a snapshot height.
@@ -556,11 +555,4 @@ func (m *Manager) snapshot(height int64) {
 // Close the snapshot database.
 func (m *Manager) Close() error {
 	return m.store.db.Close()
-}
-
-// noopSnapshotAnnouncer is a null object for snapshot announcer.
-type noopSnapshotAnnouncer struct{}
-
-// AnnounceSnapshotHeight does nothing.
-func (n noopSnapshotAnnouncer) AnnounceSnapshotHeight(height int64) {
 }

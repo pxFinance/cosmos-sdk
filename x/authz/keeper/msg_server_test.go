@@ -3,7 +3,7 @@ package keeper_test
 import (
 	"time"
 
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 
 	sdkmath "cosmossdk.io/math"
 

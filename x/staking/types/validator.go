@@ -8,7 +8,7 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
+	cmtprotocrypto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
 
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/errors"
@@ -22,9 +22,8 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
-// TODO: Why can't we just have one string description which can be JSON by convention
-
 const (
+	// TODO: Why can't we just have one string description which can be JSON by convention
 	MaxMonikerLength         = 70
 	MaxIdentityLength        = 3000
 	MaxWebsiteLength         = 140
@@ -92,12 +91,12 @@ func (v Validators) Sort() {
 	sort.Sort(v)
 }
 
-// Len implements Len sort interface
+// Implements sort interface
 func (v Validators) Len() int {
 	return len(v.Validators)
 }
 
-// Less implements Less sort interface
+// Implements sort interface
 func (v Validators) Less(i, j int) bool {
 	vi, err := v.ValidatorCodec.StringToBytes(v.Validators[i].GetOperator())
 	if err != nil {
@@ -111,7 +110,7 @@ func (v Validators) Less(i, j int) bool {
 	return bytes.Compare(vi, vj) == -1
 }
 
-// Swap implements Swap sort interface
+// Implements sort interface
 func (v Validators) Swap(i, j int) {
 	v.Validators[i], v.Validators[j] = v.Validators[j], v.Validators[i]
 }
@@ -151,12 +150,12 @@ func (v Validators) UnpackInterfaces(c codectypes.AnyUnpacker) error {
 	return nil
 }
 
-// MustMarshalValidator returns the validator bytes
+// return the redelegation
 func MustMarshalValidator(cdc codec.BinaryCodec, validator *Validator) []byte {
 	return cdc.MustMarshal(validator)
 }
 
-// MustUnmarshalValidator unmarshals a validator from a store value
+// unmarshal a redelegation from a store value
 func MustUnmarshalValidator(cdc codec.BinaryCodec, value []byte) Validator {
 	validator, err := UnmarshalValidator(cdc, value)
 	if err != nil {
@@ -166,7 +165,7 @@ func MustUnmarshalValidator(cdc codec.BinaryCodec, value []byte) Validator {
 	return validator
 }
 
-// UnmarshalValidator unmarshals a validator from a store value
+// unmarshal a redelegation from a store value
 func UnmarshalValidator(cdc codec.BinaryCodec, value []byte) (v Validator, err error) {
 	err = cdc.Unmarshal(value, &v)
 	return v, err
@@ -187,7 +186,7 @@ func (v Validator) IsUnbonding() bool {
 	return v.GetStatus() == Unbonding
 }
 
-// DoNotModifyDesc is a constant used in flags to indicate that description field should not be updated
+// constant used in flags to indicate that description field should not be updated
 const DoNotModifyDesc = "[do-not-modify]"
 
 func NewDescription(moniker, identity, website, securityContact, details string) Description {
@@ -260,28 +259,30 @@ func (d Description) EnsureLength() (Description, error) {
 // ABCIValidatorUpdate returns an abci.ValidatorUpdate from a staking validator type
 // with the full validator power
 func (v Validator) ABCIValidatorUpdate(r math.Int) abci.ValidatorUpdate {
-	tmProtoPk, err := v.TmConsPublicKey()
+	consPk, err := v.ConsPubKey()
 	if err != nil {
 		panic(err)
 	}
 
 	return abci.ValidatorUpdate{
-		PubKey: tmProtoPk,
-		Power:  v.ConsensusPower(r),
+		PubKeyBytes: consPk.Bytes(),
+		PubKeyType:  consPk.Type(),
+		Power:       v.ConsensusPower(r),
 	}
 }
 
 // ABCIValidatorUpdateZero returns an abci.ValidatorUpdate from a staking validator type
 // with zero power used for validator updates.
 func (v Validator) ABCIValidatorUpdateZero() abci.ValidatorUpdate {
-	tmProtoPk, err := v.TmConsPublicKey()
+	consPk, err := v.ConsPubKey()
 	if err != nil {
 		panic(err)
 	}
 
 	return abci.ValidatorUpdate{
-		PubKey: tmProtoPk,
-		Power:  0,
+		PubKeyBytes: consPk.Bytes(),
+		PubKeyType:  consPk.Type(),
+		Power:       0,
 	}
 }
 
@@ -297,19 +298,19 @@ func (v Validator) SetInitialCommission(commission Commission) (Validator, error
 	return v, nil
 }
 
-// InvalidExRate checks if the exchange rate becomes invalid, e.g. if
+// In some situations, the exchange rate becomes invalid, e.g. if
 // Validator loses all tokens due to slashing. In this case,
 // make all future delegations invalid.
 func (v Validator) InvalidExRate() bool {
 	return v.Tokens.IsZero() && v.DelegatorShares.IsPositive()
 }
 
-// TokensFromShares calculates the token worth of provided shares
+// calculate the token worth of provided shares
 func (v Validator) TokensFromShares(shares math.LegacyDec) math.LegacyDec {
 	return (shares.MulInt(v.Tokens)).Quo(v.DelegatorShares)
 }
 
-// TokensFromSharesTruncated calculates the token worth of provided shares, truncated
+// calculate the token worth of provided shares, truncated
 func (v Validator) TokensFromSharesTruncated(shares math.LegacyDec) math.LegacyDec {
 	return (shares.MulInt(v.Tokens)).QuoTruncate(v.DelegatorShares)
 }
@@ -340,7 +341,7 @@ func (v Validator) SharesFromTokensTruncated(amt math.Int) (math.LegacyDec, erro
 	return v.GetDelegatorShares().MulInt(amt).QuoTruncate(math.LegacyNewDecFromInt(v.GetTokens())), nil
 }
 
-// BondedTokens gets the bonded tokens which the validator holds
+// get the bonded tokens which the validator holds
 func (v Validator) BondedTokens() math.Int {
 	if v.IsBonded() {
 		return v.Tokens
@@ -504,8 +505,8 @@ func (v Validator) GetConsAddr() ([]byte, error) {
 	return pk.Address().Bytes(), nil
 }
 
-func (v Validator) GetTokens() math.Int         { return v.Tokens }
-func (v Validator) GetValidatorPower() math.Int { return v.BondedTokens() }
+func (v Validator) GetTokens() math.Int       { return v.Tokens }
+func (v Validator) GetBondedTokens() math.Int { return v.BondedTokens() }
 func (v Validator) GetConsensusPower(r math.Int) int64 {
 	return v.ConsensusPower(r)
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"cosmossdk.io/collections"
@@ -17,40 +16,42 @@ import (
 )
 
 // SubmitProposal creates a new proposal given an array of messages
-func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata, title, summary string, proposer sdk.AccAddress, expedited bool) (v1.Proposal, error) {
+func (keeper Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata, title, summary string, proposer sdk.AccAddress, expedited bool) (meterResult v1.Proposal, err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	err := k.assertMetadataLength(metadata)
+	defer keeper.Meter(ctx).FuncTiming(&sdkCtx, "SubmitProposal")(&err)
+	err = keeper.assertMetadataLength(metadata)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
 
 	// assert summary is no longer than predefined max length of metadata
-	err = k.assertSummaryLength(summary)
+	err = keeper.assertSummaryLength(summary)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
 
 	// assert title is no longer than predefined max length of metadata
-	err = k.assertMetadataLength(title)
+	err = keeper.assertMetadataLength(title)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
 
-	msgTypeURLs := make([]string, 0, len(messages))
+	// Will hold a comma-separated string of all Msg type URLs.
+	msgsStr := ""
 
 	// Loop through all messages and confirm that each has a handler and the gov module account
 	// as the only signer
 	for _, msg := range messages {
-		msgTypeURLs = append(msgTypeURLs, sdk.MsgTypeURL(msg))
+		msgsStr += fmt.Sprintf(",%s", sdk.MsgTypeURL(msg))
 
 		// perform a basic validation of the message
 		if m, ok := msg.(sdk.HasValidateBasic); ok {
-			if err := m.ValidateBasic(); err != nil {
+			if err = m.ValidateBasic(); err != nil {
 				return v1.Proposal{}, errorsmod.Wrap(types.ErrInvalidProposalMsg, err.Error())
 			}
 		}
 
-		signers, _, err := k.cdc.GetMsgV1Signers(msg)
+		signers, _, err := keeper.cdc.GetMsgV1Signers(msg)
 		if err != nil {
 			return v1.Proposal{}, err
 		}
@@ -59,12 +60,12 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 		}
 
 		// assert that the governance module account is the only signer of the messages
-		if !bytes.Equal(signers[0], k.GetGovernanceAccount(ctx).GetAddress()) {
-			return v1.Proposal{}, errorsmod.Wrapf(types.ErrInvalidSigner, "%s", sdk.AccAddress(signers[0]).String())
+		if !bytes.Equal(signers[0], keeper.GetGovernanceAccount(sdkCtx).GetAddress()) {
+			return v1.Proposal{}, errorsmod.Wrap(types.ErrInvalidSigner, sdk.AccAddress(signers[0]).String())
 		}
 
 		// use the msg service router to see that there is a valid route for that message.
-		handler := k.router.Handler(msg)
+		handler := keeper.router.Handler(msg)
 		if handler == nil {
 			return v1.Proposal{}, errorsmod.Wrap(types.ErrUnroutableProposalMsg, sdk.MsgTypeURL(msg))
 		}
@@ -77,7 +78,7 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 		if msg, ok := msg.(*v1.MsgExecLegacyContent); ok {
 			cacheCtx, _ := sdkCtx.CacheContext()
 			if _, err := handler(cacheCtx, msg); err != nil {
-				if errors.Is(err, types.ErrNoProposalHandlerExists) {
+				if errors.Is(types.ErrNoProposalHandlerExists, err) {
 					return v1.Proposal{}, err
 				}
 				return v1.Proposal{}, errorsmod.Wrap(types.ErrInvalidProposalContent, err.Error())
@@ -86,12 +87,12 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 
 	}
 
-	proposalID, err := k.ProposalID.Next(ctx)
+	proposalID, err := keeper.ProposalID.Next(sdkCtx)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
 
-	params, err := k.Params.Get(ctx)
+	params, err := keeper.Params.Get(sdkCtx)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
@@ -104,17 +105,17 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 		return v1.Proposal{}, err
 	}
 
-	err = k.SetProposal(ctx, proposal)
+	err = keeper.SetProposal(sdkCtx, proposal)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
-	err = k.InactiveProposalsQueue.Set(ctx, collections.Join(*proposal.DepositEndTime, proposalID), proposalID)
+	err = keeper.InactiveProposalsQueue.Set(sdkCtx, collections.Join(*proposal.DepositEndTime, proposalID), proposalID)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
 
 	// called right after a proposal is submitted
-	err = k.Hooks().AfterProposalSubmission(ctx, proposalID, proposer)
+	err = keeper.Hooks().AfterProposalSubmission(sdkCtx, proposalID)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
@@ -124,7 +125,7 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 			types.EventTypeSubmitProposal,
 			sdk.NewAttribute(types.AttributeKeyProposalID, fmt.Sprintf("%d", proposalID)),
 			sdk.NewAttribute(types.AttributeKeyProposalProposer, proposer.String()),
-			sdk.NewAttribute(types.AttributeKeyProposalMessages, strings.Join(msgTypeURLs, ",")),
+			sdk.NewAttribute(types.AttributeKeyProposalMessages, msgsStr),
 		),
 	)
 
@@ -132,9 +133,10 @@ func (k Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, metadata
 }
 
 // CancelProposal will cancel proposal before the voting period ends
-func (k Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer string) error {
+func (keeper Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer string) (err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	proposal, err := k.Proposals.Get(ctx, proposalID)
+	defer keeper.Meter(ctx).FuncTiming(&sdkCtx, "CancelProposal")(&err)
+	proposal, err := keeper.Proposals.Get(sdkCtx, proposalID)
 	if err != nil {
 		return err
 	}
@@ -162,29 +164,29 @@ func (k Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer 
 
 	// burn the (deposits * proposal_cancel_rate) amount or sent to cancellation destination address.
 	// and deposits * (1 - proposal_cancel_rate) will be sent to depositors.
-	params, err := k.Params.Get(ctx)
+	params, err := keeper.Params.Get(sdkCtx)
 	if err != nil {
 		return err
 	}
 
-	err = k.ChargeDeposit(ctx, proposal.Id, params.ProposalCancelDest, params.ProposalCancelRatio)
+	err = keeper.ChargeDeposit(sdkCtx, proposal.Id, params.ProposalCancelDest, params.ProposalCancelRatio)
 	if err != nil {
 		return err
 	}
 
 	if proposal.VotingStartTime != nil {
-		err = k.deleteVotes(ctx, proposal.Id)
+		err = keeper.deleteVotes(sdkCtx, proposal.Id)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = k.DeleteProposal(ctx, proposal.Id)
+	err = keeper.DeleteProposal(sdkCtx, proposal.Id)
 	if err != nil {
 		return err
 	}
 
-	k.Logger(ctx).Info(
+	keeper.Logger(sdkCtx).Info(
 		"proposal is canceled by proposer",
 		"proposal", proposal.Id,
 		"proposer", proposal.Proposer,
@@ -194,57 +196,64 @@ func (k Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer 
 }
 
 // SetProposal sets a proposal to store.
-func (k Keeper) SetProposal(ctx context.Context, proposal v1.Proposal) error {
+func (keeper Keeper) SetProposal(ctx context.Context, proposal v1.Proposal) (err error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defer keeper.Meter(ctx).FuncTiming(&sdkCtx, "SetProposal")(&err)
+
 	if proposal.Status == v1.StatusVotingPeriod {
-		err := k.VotingPeriodProposals.Set(ctx, proposal.Id, []byte{1})
+		err = keeper.VotingPeriodProposals.Set(sdkCtx, proposal.Id, []byte{1})
 		if err != nil {
 			return err
 		}
 	} else {
-		err := k.VotingPeriodProposals.Remove(ctx, proposal.Id)
+		err = keeper.VotingPeriodProposals.Remove(sdkCtx, proposal.Id)
 		if err != nil {
 			return err
 		}
 	}
 
-	return k.Proposals.Set(ctx, proposal.Id, proposal)
+	return keeper.Proposals.Set(sdkCtx, proposal.Id, proposal)
 }
 
 // DeleteProposal deletes a proposal from store.
-func (k Keeper) DeleteProposal(ctx context.Context, proposalID uint64) error {
-	proposal, err := k.Proposals.Get(ctx, proposalID)
+func (keeper Keeper) DeleteProposal(ctx context.Context, proposalID uint64) (err error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defer keeper.Meter(ctx).FuncTiming(&sdkCtx, "DeleteProposal")(&err)
+
+	proposal, err := keeper.Proposals.Get(sdkCtx, proposalID)
 	if err != nil {
 		return err
 	}
 
 	if proposal.DepositEndTime != nil {
-		err := k.InactiveProposalsQueue.Remove(ctx, collections.Join(*proposal.DepositEndTime, proposalID))
+		err = keeper.InactiveProposalsQueue.Remove(sdkCtx, collections.Join(*proposal.DepositEndTime, proposalID))
 		if err != nil {
 			return err
 		}
 	}
 	if proposal.VotingEndTime != nil {
-		err := k.ActiveProposalsQueue.Remove(ctx, collections.Join(*proposal.VotingEndTime, proposalID))
+		err = keeper.ActiveProposalsQueue.Remove(sdkCtx, collections.Join(*proposal.VotingEndTime, proposalID))
 		if err != nil {
 			return err
 		}
 
-		err = k.VotingPeriodProposals.Remove(ctx, proposalID)
+		err = keeper.VotingPeriodProposals.Remove(sdkCtx, proposalID)
 		if err != nil {
 			return err
 		}
 	}
 
-	return k.Proposals.Remove(ctx, proposalID)
+	return keeper.Proposals.Remove(sdkCtx, proposalID)
 }
 
 // ActivateVotingPeriod activates the voting period of a proposal
-func (k Keeper) ActivateVotingPeriod(ctx context.Context, proposal v1.Proposal) error {
+func (keeper Keeper) ActivateVotingPeriod(ctx context.Context, proposal v1.Proposal) (err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defer keeper.Meter(ctx).FuncTiming(&sdkCtx, "ActivateVotingPeriod")(&err)
 	startTime := sdkCtx.BlockHeader().Time
 	proposal.VotingStartTime = &startTime
 	var votingPeriod *time.Duration
-	params, err := k.Params.Get(ctx)
+	params, err := keeper.Params.Get(sdkCtx)
 	if err != nil {
 		return err
 	}
@@ -257,15 +266,15 @@ func (k Keeper) ActivateVotingPeriod(ctx context.Context, proposal v1.Proposal) 
 	endTime := proposal.VotingStartTime.Add(*votingPeriod)
 	proposal.VotingEndTime = &endTime
 	proposal.Status = v1.StatusVotingPeriod
-	err = k.SetProposal(ctx, proposal)
+	err = keeper.SetProposal(sdkCtx, proposal)
 	if err != nil {
 		return err
 	}
 
-	err = k.InactiveProposalsQueue.Remove(ctx, collections.Join(*proposal.DepositEndTime, proposal.Id))
+	err = keeper.InactiveProposalsQueue.Remove(sdkCtx, collections.Join(*proposal.DepositEndTime, proposal.Id))
 	if err != nil {
 		return err
 	}
 
-	return k.ActiveProposalsQueue.Set(ctx, collections.Join(*proposal.VotingEndTime, proposal.Id), proposal.Id)
+	return keeper.ActiveProposalsQueue.Set(sdkCtx, collections.Join(*proposal.VotingEndTime, proposal.Id), proposal.Id)
 }

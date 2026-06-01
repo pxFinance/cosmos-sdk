@@ -10,11 +10,9 @@ import (
 )
 
 // OpWeightSubmitTextProposal app params key for text proposal
-// will be removed in the future
 const OpWeightSubmitTextProposal = "op_weight_submit_text_proposal"
 
 // ProposalMsgs defines the module weighted proposals' contents
-// will be removed in the future
 func ProposalMsgs() []simtypes.WeightedProposalMsg {
 	return []simtypes.WeightedProposalMsg{
 		simulation.NewWeightedProposalMsg(
@@ -27,7 +25,6 @@ func ProposalMsgs() []simtypes.WeightedProposalMsg {
 
 // SimulateTextProposal returns a random text proposal content.
 // A text proposal is a proposal that contains no msgs.
-// will be removed in the future
 func SimulateTextProposal(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) sdk.Msg {
 	return nil
 }
@@ -45,7 +42,7 @@ func ProposalContents() []simtypes.WeightedProposalContent {
 	}
 }
 
-// SimulateLegacyTextProposalContent returns a random text proposal content.
+// SimulateTextProposalContent returns a random text proposal content.
 //
 //nolint:staticcheck // used for legacy testing
 func SimulateLegacyTextProposalContent(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) simtypes.Content {

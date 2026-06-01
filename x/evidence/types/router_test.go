@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/cosmos-sdk/x/evidence/exported"
-	"github.com/cosmos/cosmos-sdk/x/evidence/types"
+	"cosmossdk.io/x/evidence/exported"
+	"cosmossdk.io/x/evidence/types"
 )
 
 func testHandler(context.Context, exported.Evidence) error { return nil }

@@ -6,7 +6,7 @@ import (
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -22,6 +22,7 @@ func TestItCreatesModuleAccountOnInitBlock(t *testing.T) {
 	app, err := simtestutil.SetupAtGenesis(
 		depinject.Configs(
 			configurator.NewAppConfig(
+				configurator.ParamsModule(),
 				configurator.AuthModule(),
 				configurator.StakingModule(),
 				configurator.BankModule(),
@@ -35,7 +36,7 @@ func TestItCreatesModuleAccountOnInitBlock(t *testing.T) {
 	)
 	assert.NilError(t, err)
 
-	ctx := app.NewContext(false)
+	ctx := app.BaseApp.NewContext(false)
 	acc := accountKeeper.GetAccount(ctx, authtypes.NewModuleAddress(types.ModuleName))
 	assert.Assert(t, acc != nil)
 }

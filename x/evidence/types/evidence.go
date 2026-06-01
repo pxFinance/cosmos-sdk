@@ -8,13 +8,12 @@ import (
 
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/comet"
+	"cosmossdk.io/x/evidence/exported"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/evidence/exported"
 )
 
 // Evidence type constants
-
 const RouteEquivocation = "equivocation"
 
 var _ exported.Evidence = &Equivocation{}

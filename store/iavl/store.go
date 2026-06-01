@@ -3,20 +3,22 @@ package iavl
 import (
 	"errors"
 	"fmt"
+	"io"
 
-	cmtprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
+	cmtprotocrypto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/iavl"
 	ics23 "github.com/cosmos/ics23/go"
 
 	errorsmod "cosmossdk.io/errors"
-	"cosmossdk.io/log/v2"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/internal/kv"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/wrapper"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/internal/kv"
+	"cosmossdk.io/store/metrics"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/tracekv"
+	"cosmossdk.io/store/types"
+	"cosmossdk.io/store/wrapper"
 )
 
 const (
@@ -33,30 +35,27 @@ var (
 
 // Store Implements types.KVStore and CommitKVStore.
 type Store struct {
-	tree   Tree
-	logger log.Logger
+	tree    Tree
+	logger  log.Logger
+	metrics metrics.StoreMetrics
 }
 
 // LoadStore returns an IAVL Store as a CommitKVStore. Internally, it will load the
 // store's version (id) from the provided DB. An error is returned if the version
 // fails to load, or if called with a positive version on an empty tree.
-func LoadStore(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, cacheSize int, disableFastNode bool) (types.CommitKVStore, error) {
-	return LoadStoreWithInitialVersion(db, logger, key, id, 0, cacheSize, disableFastNode)
+func LoadStore(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, cacheSize int, disableFastNode bool, metrics metrics.StoreMetrics) (types.CommitKVStore, error) {
+	return LoadStoreWithInitialVersion(db, logger, key, id, 0, cacheSize, disableFastNode, metrics)
 }
 
 // LoadStoreWithInitialVersion returns an IAVL Store as a CommitKVStore setting its initialVersion
 // to the one given. Internally, it will load the store's version (id) from the
 // provided DB. An error is returned if the version fails to load, or if called with a positive
 // version on an empty tree.
-func LoadStoreWithInitialVersion(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, initialVersion uint64, cacheSize int, disableFastNode bool) (types.CommitKVStore, error) {
-	return LoadStoreWithOpts(db, logger, key, id, initialVersion, cacheSize, disableFastNode, iavl.AsyncPruningOption(true))
+func LoadStoreWithInitialVersion(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, initialVersion uint64, cacheSize int, disableFastNode bool, metrics metrics.StoreMetrics) (types.CommitKVStore, error) {
+	return LoadStoreWithOpts(db, logger, key, id, initialVersion, cacheSize, disableFastNode, metrics, iavl.AsyncPruningOption(false))
 }
 
-func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, initialVersion uint64, cacheSize int, disableFastNode bool, opts ...iavl.Option) (types.CommitKVStore, error) {
-	// store/v1 and app/v1 flows never require an initial version of 0
-	if initialVersion == 0 {
-		initialVersion = 1
-	}
+func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id types.CommitID, initialVersion uint64, cacheSize int, disableFastNode bool, metrics metrics.StoreMetrics, opts ...iavl.Option) (types.CommitKVStore, error) {
 	opts = append(opts, iavl.InitialVersionOption(initialVersion))
 	tree := iavl.NewMutableTree(wrapper.NewDBWrapper(db), cacheSize, disableFastNode, logger, opts...)
 
@@ -84,8 +83,9 @@ func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id type
 	}
 
 	return &Store{
-		tree:   tree,
-		logger: logger,
+		tree:    tree,
+		logger:  logger,
+		metrics: metrics,
 	}, nil
 }
 
@@ -97,7 +97,8 @@ func LoadStoreWithOpts(db dbm.DB, logger log.Logger, key types.StoreKey, id type
 // passed into iavl.MutableTree
 func UnsafeNewStore(tree *iavl.MutableTree) *Store {
 	return &Store{
-		tree: tree,
+		tree:    tree,
+		metrics: metrics.NewNoOpMetrics(),
 	}
 }
 
@@ -117,13 +118,16 @@ func (st *Store) GetImmutable(version int64) (*Store, error) {
 	}
 
 	return &Store{
-		tree: &immutableTree{iTree},
+		tree:    &immutableTree{iTree},
+		metrics: st.metrics,
 	}, nil
 }
 
 // Commit commits the current store state and returns a CommitID with the new
 // version and hash.
 func (st *Store) Commit() types.CommitID {
+	defer st.metrics.MeasureSince("store", "iavl", "commit")
+
 	hash, version, err := st.tree.SaveVersion()
 	if err != nil {
 		panic(err)
@@ -148,13 +152,22 @@ func (st *Store) LastCommitID() types.CommitID {
 	}
 }
 
+// PausePruning implements CommitKVStore interface.
+func (st *Store) PausePruning(pause bool) {
+	if pause {
+		st.tree.SetCommitting()
+	} else {
+		st.tree.UnsetCommitting()
+	}
+}
+
 // SetPruning panics as pruning options should be provided at initialization
 // since IAVl accepts pruning options directly.
 func (st *Store) SetPruning(_ pruningtypes.PruningOptions) {
 	panic("cannot set pruning options on an initialized IAVL store")
 }
 
-// GetPruning panics as pruning options should be provided at initialization
+// SetPruning panics as pruning options should be provided at initialization
 // since IAVl accepts pruning options directly.
 func (st *Store) GetPruning() pruningtypes.PruningOptions {
 	panic("cannot get pruning options on an initialized IAVL store")
@@ -170,17 +183,22 @@ func (st *Store) GetAllVersions() []int {
 	return st.tree.AvailableVersions()
 }
 
-// GetStoreType implements Store, returns StoreTypeIAVL.
+// Implements Store.
 func (st *Store) GetStoreType() types.StoreType {
 	return types.StoreTypeIAVL
 }
 
-// CacheWrap implements Store, returns a cachewrap around the store.
+// Implements Store.
 func (st *Store) CacheWrap() types.CacheWrap {
 	return cachekv.NewStore(st)
 }
 
-// Set implements types.KVStore, creates a new key/value pair in the underlying IAVL tree.
+// CacheWrapWithTrace implements the Store interface.
+func (st *Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
+	return cachekv.NewStore(tracekv.NewStore(st, w, tc))
+}
+
+// Implements types.KVStore.
 func (st *Store) Set(key, value []byte) {
 	types.AssertValidKey(key)
 	types.AssertValidValue(value)
@@ -190,8 +208,9 @@ func (st *Store) Set(key, value []byte) {
 	}
 }
 
-// Get implements types.KVStore.
+// Implements types.KVStore.
 func (st *Store) Get(key []byte) []byte {
+	defer st.metrics.MeasureSince("store", "iavl", "get")
 	value, err := st.tree.Get(key)
 	if err != nil {
 		panic(err)
@@ -199,8 +218,9 @@ func (st *Store) Get(key []byte) []byte {
 	return value
 }
 
-// Has implements types.KVStore, returns true if the key exists in the underlying IAVL tree.
+// Implements types.KVStore.
 func (st *Store) Has(key []byte) (exists bool) {
+	defer st.metrics.MeasureSince("store", "iavl", "has")
 	has, err := st.tree.Has(key)
 	if err != nil {
 		panic(err)
@@ -208,15 +228,16 @@ func (st *Store) Has(key []byte) (exists bool) {
 	return has
 }
 
-// Delete implements types.KVStore, removes the given key from the underlying IAVL tree.
+// Implements types.KVStore.
 func (st *Store) Delete(key []byte) {
+	defer st.metrics.MeasureSince("store", "iavl", "delete")
 	_, _, err := st.tree.Remove(key)
 	if err != nil {
 		panic(err)
 	}
 }
 
-// DeleteVersionsTo deletes versions up to the given version from the MutableTree. An error
+// DeleteVersionsTo deletes versions upto the given version from the MutableTree. An error
 // is returned if any single version is invalid or the delete fails. All writes
 // happen in a single batch with a single commit.
 func (st *Store) DeleteVersionsTo(version int64) error {
@@ -229,7 +250,7 @@ func (st *Store) LoadVersionForOverwriting(targetVersion int64) error {
 	return st.tree.LoadVersionForOverwriting(targetVersion)
 }
 
-// Iterator implements types.KVStore, returns an iterator from the underlying IAVL tree.
+// Implements types.KVStore.
 func (st *Store) Iterator(start, end []byte) types.Iterator {
 	iterator, err := st.tree.Iterator(start, end, true)
 	if err != nil {
@@ -238,7 +259,7 @@ func (st *Store) Iterator(start, end []byte) types.Iterator {
 	return iterator
 }
 
-// ReverseIterator implements types.KVStore, returns a reverse iterator from the underlying IAVL tree.
+// Implements types.KVStore.
 func (st *Store) ReverseIterator(start, end []byte) types.Iterator {
 	iterator, err := st.tree.Iterator(start, end, false)
 	if err != nil {
@@ -253,7 +274,7 @@ func (st *Store) SetInitialVersion(version int64) {
 	st.tree.SetInitialVersion(uint64(version))
 }
 
-// Export exports the IAVL store at the given version, returning an iavl.Exporter for the tree.
+// Exports the IAVL store at the given version, returning an iavl.Exporter for the tree.
 func (st *Store) Export(version int64) (*iavl.Exporter, error) {
 	istore, err := st.GetImmutable(version)
 	if err != nil {
@@ -275,7 +296,7 @@ func (st *Store) Import(version int64) (*iavl.Importer, error) {
 	return tree.Import(version)
 }
 
-// Handle gets the latest height, if height is 0
+// Handle gatest the latest height, if height is 0
 func getHeight(tree Tree, req *types.RequestQuery) int64 {
 	height := req.Height
 	if height == 0 {
@@ -297,6 +318,8 @@ func getHeight(tree Tree, req *types.RequestQuery) int64 {
 // if you care to have the latest data to see a tx results, you must
 // explicitly set the height you want to see
 func (st *Store) Query(req *types.RequestQuery) (res *types.ResponseQuery, err error) {
+	defer st.metrics.MeasureSince("store", "iavl", "query")
+
 	if len(req.Data) == 0 {
 		return &types.ResponseQuery{}, errorsmod.Wrap(types.ErrTxDecode, "query cannot be zero length")
 	}

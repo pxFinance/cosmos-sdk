@@ -1,4 +1,5 @@
 //go:build e2e
+// +build e2e
 
 package mint
 
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/simapp"
-
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 )
 

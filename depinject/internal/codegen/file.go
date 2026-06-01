@@ -1,7 +1,7 @@
 package codegen
 
 import (
-	"errors"
+	"fmt"
 	"go/ast"
 	"go/token"
 	"strconv"
@@ -39,11 +39,11 @@ func NewFileGen(file *ast.File, codegenPkgPath string) (*FileGen, error) {
 			g.idents[decl.Name.Name] = true
 		case *ast.GenDecl:
 			for _, spec := range decl.Specs {
-				switch specType := spec.(type) {
+				switch spec := spec.(type) {
 				case *ast.TypeSpec:
-					g.idents[specType.Name.Name] = true
+					g.idents[spec.Name.Name] = true
 				case *ast.ValueSpec:
-					for _, name := range specType.Names {
+					for _, name := range spec.Names {
 						g.idents[name.Name] = true
 					}
 				}
@@ -61,7 +61,7 @@ func NewFileGen(file *ast.File, codegenPkgPath string) (*FileGen, error) {
 		if spec.Name != nil {
 			name := spec.Name.Name
 			if name == "." {
-				return nil, errors.New(". package imports are not allowed")
+				return nil, fmt.Errorf(". package imports are not allowed")
 			}
 
 			info = &importInfo{importPrefix: name, ImportSpec: spec}

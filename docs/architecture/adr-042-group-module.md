@@ -22,13 +22,13 @@ The legacy amino multi-signature mechanism of the Cosmos SDK has certain limitat
 * It requires `legacy_amino` sign mode ([#8141](https://github.com/cosmos/cosmos-sdk/issues/8141)).
 
 While the group module is not meant to be a total replacement for the current multi-signature accounts, it provides a solution to the limitations described above, with a more flexible key management system where keys can be added, updated or removed, as well as configurable thresholds.
-It's meant to be used with other access control modules such as [`x/feegrant`](./adr-029-fee-grant-module.md) and [`x/authz`](adr-030-authz-module.md) to simplify key management for individuals and organizations.
+It's meant to be used with other access control modules such as [`x/feegrant`](./adr-029-fee-grant-module.md) ans [`x/authz`](adr-030-authz-module.md) to simplify key management for individuals and organizations.
 
-The proof of concept of the group module can be found in https://github.com/cosmos/cosmos-sdk/tree/main/proto/cosmos/group/v1 and https://github.com/cosmos/cosmos-sdk/tree/main/x/group.
+The proof of concept of the group module can be found in https://github.com/regen-network/regen-ledger/tree/master/proto/regen/group/v1alpha1 and https://github.com/regen-network/regen-ledger/tree/master/x/group.
 
 ## Decision
 
-We propose merging the `x/group` module with its supporting [ORM/Table Store package](https://github.com/cosmos/cosmos-sdk/tree/main/x/group/internal/orm) ([#7098](https://github.com/cosmos/cosmos-sdk/issues/7098)) into the Cosmos SDK and continuing development here. There will be a dedicated ADR for the ORM package.
+We propose merging the `x/group` module with its supporting state table package from regen-ledger ([#7098](https://github.com/cosmos/cosmos-sdk/issues/7098)) into the Cosmos SDK and continuing development here.
 
 ### Group
 
@@ -234,9 +234,9 @@ In the current implementation, updating a group or a group account after submitt
 
 This section outlines the current implementation used in the proof of concept of the group module but this could be subject to changes and iterated on.
 
-#### ORM
+#### State tables
 
-The [ORM package](https://github.com/cosmos/cosmos-sdk/discussions/9156) defines tables, sequences and secondary indexes which are used in the group module.
+The group module uses an internal table abstraction that defines tables, sequences and secondary indexes.
 
 Groups are stored in state as part of a `groupTable`, the `group_id` being an auto-increment integer. Group members are stored in a `groupMemberTable`.
 
@@ -261,7 +261,7 @@ Inter-module communication introduced by [ADR-033](adr-033-protobuf-inter-module
 ### Neutral
 
 * It uses ADR 033 so it will need to be implemented within the Cosmos SDK, but this doesn't imply necessarily any large refactoring of existing Cosmos SDK modules.
-* The current implementation of the group module uses the ORM package.
+* The current implementation of the group module uses an internal table abstraction.
 
 ## Further Discussions
 

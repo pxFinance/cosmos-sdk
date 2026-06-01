@@ -9,7 +9,7 @@ import (
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -30,6 +30,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov/keeper"
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -47,6 +48,7 @@ type suite struct {
 }
 
 var appConfig = configurator.NewAppConfig(
+	configurator.ParamsModule(),
 	configurator.AuthModule(),
 	configurator.StakingModule(),
 	configurator.BankModule(),
@@ -70,15 +72,15 @@ func TestImportExportQueues(t *testing.T) {
 	)
 	assert.NilError(t, err)
 
-	ctx := s1.app.NewContext(false)
+	ctx := s1.app.BaseApp.NewContext(false)
 	addrs := simtestutil.AddTestAddrs(s1.BankKeeper, s1.StakingKeeper, ctx, 1, valTokens)
 
-	_, err = s1.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	_, err = s1.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: s1.app.LastBlockHeight() + 1,
 	})
 	assert.NilError(t, err)
 
-	ctx = s1.app.NewContext(false)
+	ctx = s1.app.BaseApp.NewContext(false)
 	// Create two proposals, put the second into the voting period
 	proposal1, err := s1.GovKeeper.SubmitProposal(ctx, []sdk.Msg{mkTestLegacyContent(t)}, "", "test", "description", addrs[0], false)
 	assert.NilError(t, err)
@@ -107,7 +109,7 @@ func TestImportExportQueues(t *testing.T) {
 	distributionGenState := s1.DistrKeeper.ExportGenesis(ctx)
 
 	// export the state and import it into a new app
-	govGenState, _ := keeper.ExportGenesis(ctx, s1.GovKeeper)
+	govGenState, _ := gov.ExportGenesis(ctx, s1.GovKeeper)
 	genesisState := s1.appBuilder.DefaultGenesis()
 
 	genesisState[authtypes.ModuleName] = s1.cdc.MustMarshalJSON(authGenState)
@@ -138,7 +140,7 @@ func TestImportExportQueues(t *testing.T) {
 	assert.NilError(t, err)
 
 	_, err = s2.app.InitChain(
-		&abci.RequestInitChain{
+		&abci.InitChainRequest{
 			Validators:      []abci.ValidatorUpdate{},
 			ConsensusParams: simtestutil.DefaultConsensusParams,
 			AppStateBytes:   stateBytes,
@@ -146,17 +148,17 @@ func TestImportExportQueues(t *testing.T) {
 	)
 	assert.NilError(t, err)
 
-	_, err = s2.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	_, err = s2.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: s2.app.LastBlockHeight() + 1,
 	})
 	assert.NilError(t, err)
 
-	_, err = s2.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	_, err = s2.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: s2.app.LastBlockHeight() + 1,
 	})
 	assert.NilError(t, err)
 
-	ctx2 := s2.app.NewContext(false)
+	ctx2 := s2.app.BaseApp.NewContext(false)
 
 	params, err = s2.GovKeeper.Params.Get(ctx2)
 	assert.NilError(t, err)
@@ -187,8 +189,6 @@ func TestImportExportQueues(t *testing.T) {
 }
 
 func clearDB(t *testing.T, db *dbm.MemDB) {
-	t.Helper()
-
 	iter, err := db.Iterator(nil, nil)
 	assert.NilError(t, err)
 	defer iter.Close()

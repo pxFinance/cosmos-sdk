@@ -4,7 +4,7 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 
 	"cosmossdk.io/math"
 
@@ -31,7 +31,7 @@ func (s *KeeperTestSuite) TestValidator() {
 	valAddr := sdk.ValAddress(valPubKey.Address().Bytes())
 	valTokens := keeper.TokensFromConsensusPower(ctx, 10)
 
-	// test how the validator is set from a purely unbonded pool
+	// test how the validator is set from a purely unbonbed pool
 	validator := testutil.NewValidator(s.T(), valAddr, valPubKey)
 	validator, _ = validator.AddTokensFromDel(valTokens)
 	require.Equal(stakingtypes.Unbonded, validator.Status)

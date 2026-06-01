@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/math"
+	"cosmossdk.io/simapp"
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec/address"
@@ -27,17 +28,12 @@ type WithdrawAllTestSuite struct {
 	network *network.Network
 }
 
-func NewWithdrawAllTestSuite() *WithdrawAllTestSuite {
-	return &WithdrawAllTestSuite{}
-}
-
 func (s *WithdrawAllTestSuite) SetupSuite() {
-	s.T().Log("setting up withdraw all e2e test suite")
-
-	cfg := initNetworkConfig(s.T())
+	cfg := network.DefaultConfig(simapp.NewTestNetworkFixture)
 	cfg.NumValidators = 2
 	s.cfg = cfg
 
+	s.T().Log("setting up e2e test suite")
 	network, err := network.New(s.T(), s.T().TempDir(), s.cfg)
 	s.Require().NoError(err)
 	s.network = network
@@ -45,14 +41,14 @@ func (s *WithdrawAllTestSuite) SetupSuite() {
 	s.Require().NoError(s.network.WaitForNextBlock())
 }
 
-// TearDownSuite cleans up the current test network after _each_ test.
+// TearDownSuite cleans up the curret test network after _each_ test.
 func (s *WithdrawAllTestSuite) TearDownSuite() {
-	s.T().Log("tearing down withdraw all e2e test suite")
+	s.T().Log("tearing down e2e test suite")
 	s.network.Cleanup()
 }
 
-// TestNewWithdrawAllRewardsGenerateOnly requires multiple validators, if I add this test to `E2ETestSuite` by increasing
-// `NumValidators` the existing tests are leading to non-determinism so created new suite for this test.
+// This test requires multiple validators, if I add this test to `E2ETestSuite` by increasing
+// `NumValidators` the existing tests are leading to non-determnism so created new suite for this test.
 func (s *WithdrawAllTestSuite) TestNewWithdrawAllRewardsGenerateOnly() {
 	require := s.Require()
 	val := s.network.Validators[0]

@@ -3,9 +3,11 @@ package prefix
 import (
 	"bytes"
 	"errors"
+	"io"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/tracekv"
+	"cosmossdk.io/store/types"
 )
 
 type (
@@ -21,22 +23,22 @@ var (
 func NewStore(parent types.KVStore, prefix []byte) Store {
 	return NewGStore(
 		parent, prefix,
-		types.BytesIsZero,
-		types.BytesValueLen,
+		func(v []byte) bool { return v == nil },
+		func(v []byte) int { return len(v) },
 	)
 }
 
 func NewObjStore(parent types.ObjKVStore, prefix []byte) ObjStore {
 	return NewGStore(
 		parent, prefix,
-		types.AnyIsZero,
-		types.AnyValueLen,
+		func(v any) bool { return v == nil },
+		func(v any) int { return 1 },
 	)
 }
 
-// GStore is similar to cometbft/cometbft/libs/db/prefix_db
-// both give access only to the limited subset of the store
-// for convenience or safety
+// GStore is similar with cometbft/cometbft/libs/db/prefix_db
+// both gives access only to the limited subset of the store
+// for convinience or safety
 type GStore[V any] struct {
 	parent types.GKVStore[V]
 	prefix []byte
@@ -62,7 +64,7 @@ func cloneAppend(bz, tail []byte) (res []byte) {
 	res = make([]byte, len(bz)+len(tail))
 	copy(res, bz)
 	copy(res[len(bz):], tail)
-	return res
+	return
 }
 
 func (s GStore[V]) key(key []byte) (res []byte) {
@@ -70,61 +72,69 @@ func (s GStore[V]) key(key []byte) (res []byte) {
 		panic("nil key on Store")
 	}
 	res = cloneAppend(s.prefix, key)
-	return res
+	return
 }
 
-// GetStoreType implements Store, returning the parent store's type
+// Implements Store
 func (s GStore[V]) GetStoreType() types.StoreType {
 	return s.parent.GetStoreType()
 }
 
-// CacheWrap implements CacheWrap, returning a new CacheWrap with the parent store as the underlying store
+// Implements CacheWrap
 func (s GStore[V]) CacheWrap() types.CacheWrap {
 	return cachekv.NewGStore(s, s.isZero, s.valueLen)
 }
 
-// Get implements KVStore, calls Get on the parent store with the key prefixed with the prefix
+// CacheWrapWithTrace implements the KVStore interface.
+func (s GStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
+	if store, ok := any(s).(*GStore[[]byte]); ok {
+		return cachekv.NewGStore(tracekv.NewStore(store, w, tc), store.isZero, store.valueLen)
+	}
+	return s.CacheWrap()
+}
+
+// Implements KVStore
 func (s GStore[V]) Get(key []byte) V {
 	res := s.parent.Get(s.key(key))
 	return res
 }
 
-// Has implements KVStore, calls Has on the parent store with the key prefixed with the prefix
+// Implements KVStore
 func (s GStore[V]) Has(key []byte) bool {
 	return s.parent.Has(s.key(key))
 }
 
-// Set implements KVStore, calls Set on the parent store with the key prefixed with the prefix
+// Implements KVStore
 func (s GStore[V]) Set(key []byte, value V) {
 	types.AssertValidKey(key)
 	types.AssertValidValueGeneric(value, s.isZero, s.valueLen)
 	s.parent.Set(s.key(key), value)
 }
 
-// Delete implements KVStore, calls Delete on the parent store with the key prefixed with the prefix
+// Implements KVStore
 func (s GStore[V]) Delete(key []byte) {
 	s.parent.Delete(s.key(key))
 }
 
-// Iterator implements KVStore
-// Check https://github.com/cometbft/cometbft-db/blob/main/prefixdb_iterator.go#L106
+// Implements KVStore
+// Check https://github.com/cometbft/cometbft/blob/master/libs/db/prefix_db.go#L106
 func (s GStore[V]) Iterator(start, end []byte) types.GIterator[V] {
-	newStart := cloneAppend(s.prefix, start)
+	newstart := cloneAppend(s.prefix, start)
 
-	var newEnd []byte
+	var newend []byte
 	if end == nil {
-		newEnd = cpIncr(s.prefix)
+		newend = cpIncr(s.prefix)
 	} else {
-		newEnd = cloneAppend(s.prefix, end)
+		newend = cloneAppend(s.prefix, end)
 	}
 
-	iter := s.parent.Iterator(newStart, newEnd)
+	iter := s.parent.Iterator(newstart, newend)
 
 	return newPrefixIterator(s.prefix, start, end, iter)
 }
 
 // ReverseIterator implements KVStore
-// Check https://github.com/cometbft/cometbft-db/blob/main/prefixdb_iterator.go#L129
+// Check https://github.com/cometbft/cometbft/blob/master/libs/db/prefix_db.go#L129
 func (s GStore[V]) ReverseIterator(start, end []byte) types.GIterator[V] {
 	newstart := cloneAppend(s.prefix, start)
 
@@ -160,17 +170,17 @@ func newPrefixIterator[V any](prefix, start, end []byte, parent types.GIterator[
 	}
 }
 
-// Domain implements Iterator, returning the start and end keys of the prefixIterator.
+// Implements Iterator
 func (pi *prefixIterator[V]) Domain() ([]byte, []byte) {
 	return pi.start, pi.end
 }
 
-// Valid implements Iterator, checking if the prefixIterator is valid and if the underlying iterator is valid.
+// Implements Iterator
 func (pi *prefixIterator[V]) Valid() bool {
 	return pi.valid && pi.iter.Valid()
 }
 
-// Next implements Iterator, moving the underlying iterator to the next key/value pair that starts with the prefix.
+// Implements Iterator
 func (pi *prefixIterator[V]) Next() {
 	if !pi.valid {
 		panic("prefixIterator invalid, cannot call Next()")
@@ -182,7 +192,7 @@ func (pi *prefixIterator[V]) Next() {
 	}
 }
 
-// Key implements Iterator, returning the stripped prefix key
+// Implements Iterator
 func (pi *prefixIterator[V]) Key() (key []byte) {
 	if !pi.valid {
 		panic("prefixIterator invalid, cannot call Key()")
@@ -191,7 +201,7 @@ func (pi *prefixIterator[V]) Key() (key []byte) {
 	key = pi.iter.Key()
 	key = stripPrefix(key, pi.prefix)
 
-	return key
+	return
 }
 
 // Implements Iterator
@@ -203,7 +213,7 @@ func (pi *prefixIterator[V]) Value() V {
 	return pi.iter.Value()
 }
 
-// Close implements Iterator, closing the underlying iterator.
+// Implements Iterator
 func (pi *prefixIterator[V]) Close() error {
 	return pi.iter.Close()
 }
@@ -218,7 +228,7 @@ func (pi *prefixIterator[V]) Error() error {
 	return nil
 }
 
-// stripPrefix is copied from github.com/cometbft/cometbft/libs/db/prefix_db.go
+// copied from github.com/cometbft/cometbft/libs/db/prefix_db.go
 func stripPrefix(key, prefix []byte) []byte {
 	if len(key) < len(prefix) || !bytes.Equal(key[:len(prefix)], prefix) {
 		panic("should not happen")
@@ -227,7 +237,7 @@ func stripPrefix(key, prefix []byte) []byte {
 	return key[len(prefix):]
 }
 
-// cpIncr wraps the bytes in types.PrefixEndBytes
+// wrapping types.PrefixEndBytes
 func cpIncr(bz []byte) []byte {
 	return types.PrefixEndBytes(bz)
 }

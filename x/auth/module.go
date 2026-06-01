@@ -16,11 +16,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/telemetry"
-	"github.com/cosmos/cosmos-sdk/testutil/simsx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
+	"github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	"github.com/cosmos/cosmos-sdk/x/auth/simulation"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -28,7 +27,7 @@ import (
 
 // ConsensusVersion defines the current x/auth module consensus version.
 const (
-	ConsensusVersion = 6
+	ConsensusVersion = 5
 	GovModuleName    = "gov"
 )
 
@@ -37,7 +36,6 @@ var (
 	_ module.AppModuleSimulation = AppModule{}
 	_ module.HasGenesis          = AppModule{}
 	_ module.HasServices         = AppModule{}
-	_ appmodule.HasPreBlocker    = AppModule{}
 
 	_ appmodule.AppModule = AppModule{}
 )
@@ -91,20 +89,9 @@ type AppModule struct {
 
 	accountKeeper     keeper.AccountKeeper
 	randGenAccountsFn types.RandomGenesisAccountsFn
-}
 
-// PreBlock cleans up expired unordered transaction nonces from state.
-// Please ensure to add `x/auth`'s module name to the OrderPreBlocker list in your application.
-func (am AppModule) PreBlock(ctx context.Context) (appmodule.ResponsePreBlock, error) {
-	start := telemetry.Now()                                                                   //nolint:staticcheck // TODO: switch to OpenTelemetry
-	defer telemetry.ModuleMeasureSince(types.ModuleName, start, telemetry.MetricKeyPreBlocker) //nolint:staticcheck // TODO: switch to OpenTelemetry
-	if am.accountKeeper.UnorderedTransactionsEnabled() {
-		err := am.accountKeeper.RemoveExpiredUnorderedNonces(sdk.UnwrapSDKContext(ctx))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &sdk.ResponsePreBlock{ConsensusParamsChanged: false}, nil
+	// legacySubspace is used solely for migration of x/params managed parameters
+	legacySubspace exported.Subspace
 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
@@ -114,11 +101,12 @@ func (am AppModule) IsOnePerModuleType() {}
 func (am AppModule) IsAppModule() {}
 
 // NewAppModule creates a new AppModule object
-func NewAppModule(cdc codec.Codec, accountKeeper keeper.AccountKeeper, randGenAccountsFn types.RandomGenesisAccountsFn) AppModule {
+func NewAppModule(cdc codec.Codec, accountKeeper keeper.AccountKeeper, randGenAccountsFn types.RandomGenesisAccountsFn, ss exported.Subspace) AppModule {
 	return AppModule{
 		AppModuleBasic:    AppModuleBasic{ac: accountKeeper.AddressCodec()},
 		accountKeeper:     accountKeeper,
 		randGenAccountsFn: randGenAccountsFn,
+		legacySubspace:    ss,
 	}
 }
 
@@ -128,9 +116,21 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.accountKeeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServer(am.accountKeeper))
 
-	m := keeper.NewMigrator(am.accountKeeper, cfg.QueryServer())
-	if err := cfg.RegisterMigration(types.ModuleName, 5, m.Migrate5to6); err != nil {
-		panic(fmt.Sprintf("failed to migrate x/%s from version 5 to 6: %v", types.ModuleName, err))
+	m := keeper.NewMigrator(am.accountKeeper, cfg.QueryServer(), am.legacySubspace)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 1 to 2: %v", types.ModuleName, err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 2, m.Migrate2to3); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 2 to 3: %v", types.ModuleName, err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 3, m.Migrate3to4); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 3 to 4: %v", types.ModuleName, err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 4, m.Migrate4To5); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 4 to 5", types.ModuleName))
 	}
 }
 
@@ -160,14 +160,8 @@ func (am AppModule) GenerateGenesisState(simState *module.SimulationState) {
 }
 
 // ProposalMsgs returns msgs used for governance proposals for simulations.
-// migrate to ProposalMsgsX. This method is ignored when ProposalMsgsX exists and will be removed in the future.
 func (AppModule) ProposalMsgs(simState module.SimulationState) []simtypes.WeightedProposalMsg {
 	return simulation.ProposalMsgs()
-}
-
-// ProposalMsgsX registers governance proposal messages in the simulation registry.
-func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_update_params", 100), simulation.MsgUpdateParamsFactory())
 }
 
 // RegisterStoreDecoder registers a decoder for auth module's types
@@ -200,6 +194,9 @@ type ModuleInputs struct {
 	AddressCodec            address.Codec
 	RandomGenesisAccountsFn types.RandomGenesisAccountsFn `optional:"true"`
 	AccountI                func() sdk.AccountI           `optional:"true"`
+
+	// LegacySubspace is used solely for migration of x/params managed parameters
+	LegacySubspace exported.Subspace `optional:"true"`
 }
 
 type ModuleOutputs struct {
@@ -229,10 +226,8 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		in.AccountI = types.ProtoBaseAccount
 	}
 
-	keeperOpts := []keeper.InitOption{keeper.WithUnorderedTransactions(in.Config.EnableUnorderedTransactions)}
-
-	k := keeper.NewAccountKeeper(in.Cdc, in.StoreService, in.AccountI, maccPerms, in.AddressCodec, in.Config.Bech32Prefix, authority.String(), keeperOpts...)
-	m := NewAppModule(in.Cdc, k, in.RandomGenesisAccountsFn)
+	k := keeper.NewAccountKeeper(in.Cdc, in.StoreService, in.AccountI, maccPerms, in.AddressCodec, in.Config.Bech32Prefix, authority.String())
+	m := NewAppModule(in.Cdc, k, in.RandomGenesisAccountsFn, in.LegacySubspace)
 
 	return ModuleOutputs{AccountKeeper: k, Module: m}
 }

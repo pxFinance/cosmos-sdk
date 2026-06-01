@@ -2,12 +2,12 @@ package query
 
 import (
 	"fmt"
-	"math"
 
 	proto "github.com/cosmos/gogoproto/proto"
 
+	"cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
 )
 
 // FilteredPaginate does pagination of all the results in the PrefixStore based on the
@@ -58,12 +58,6 @@ func FilteredPaginate(
 	}
 
 	end := pageRequest.Offset + pageRequest.Limit
-	if end < pageRequest.Offset {
-		// Saturate to MaxUint64 when offset+limit overflows. Without this,
-		// a caller passing an absurdly large limit would wrap end back to a
-		// small number and the loop would return zero results.
-		end = math.MaxUint64
-	}
 	accumulateFn := func(numHits uint64) bool { return numHits >= pageRequest.Offset && numHits < end }
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -71,9 +65,7 @@ func FilteredPaginate(
 		if err != nil {
 			return nil, err
 		}
-		// numHits > end (rather than ==end+1) so the check stays correct
-		// when end has been saturated to MaxUint64 and end+1 would wrap.
-		if numHits > end {
+		if numHits == end+1 {
 			if nextKey == nil {
 				nextKey = iterator.Key()
 			}
@@ -191,12 +183,6 @@ func GenericFilteredPaginate[T, F proto.Message](
 	}
 
 	end := pageRequest.Offset + pageRequest.Limit
-	if end < pageRequest.Offset {
-		// Saturate to MaxUint64 when offset+limit overflows. Without this,
-		// a caller passing an absurdly large limit would wrap end back to a
-		// small number and the loop would return zero results.
-		end = math.MaxUint64
-	}
 	accumulateFn := func(numHits uint64) bool { return numHits >= pageRequest.Offset && numHits < end }
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -205,9 +191,7 @@ func GenericFilteredPaginate[T, F proto.Message](
 			return nil, nil, err
 		}
 
-		// numHits > end (rather than ==end+1) so the check stays correct
-		// when end has been saturated to MaxUint64 and end+1 would wrap.
-		if numHits > end {
+		if numHits == end+1 {
 			if nextKey == nil {
 				nextKey = iterator.Key()
 			}

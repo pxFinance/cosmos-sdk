@@ -2,12 +2,11 @@ package distribution
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
 
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/suite"
+
+	"cosmossdk.io/simapp"
 
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/cosmos/cosmos-sdk/testutil/network"
@@ -24,15 +23,10 @@ type GRPCQueryTestSuite struct {
 	network *network.Network
 }
 
-func NewGRPCQueryTestSuite() *GRPCQueryTestSuite {
-	return &GRPCQueryTestSuite{}
-}
-
 func (s *GRPCQueryTestSuite) SetupSuite() {
-	s.T().Log("setting up grpc e2e test suite")
+	s.T().Log("setting up e2e test suite")
 
-	cfg := initNetworkConfig(s.T())
-
+	cfg := network.DefaultConfig(simapp.NewTestNetworkFixture)
 	cfg.NumValidators = 1
 	s.cfg = cfg
 
@@ -43,9 +37,9 @@ func (s *GRPCQueryTestSuite) SetupSuite() {
 	s.Require().NoError(s.network.WaitForNextBlock())
 }
 
-// TearDownSuite cleans up the current test network after _each_ test.
+// TearDownSuite cleans up the curret test network after _each_ test.
 func (s *GRPCQueryTestSuite) TearDownSuite() {
-	s.T().Log("tearing down grpc e2e test suite")
+	s.T().Log("tearing down e2e test suite1")
 	s.network.Cleanup()
 }
 
@@ -70,6 +64,7 @@ func (s *GRPCQueryTestSuite) TestQueryParamsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequest(tc.url)
 		s.Run(tc.name, func() {
 			s.Require().NoError(err)
@@ -104,6 +99,7 @@ func (s *GRPCQueryTestSuite) TestQueryValidatorDistributionInfoGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequest(tc.url)
 		s.Run(tc.name, func() {
 			if tc.expErr {
@@ -156,6 +152,7 @@ func (s *GRPCQueryTestSuite) TestQueryOutstandingRewardsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequestWithHeaders(tc.url, tc.headers)
 		s.Run(tc.name, func() {
 			if tc.expErr {
@@ -209,6 +206,7 @@ func (s *GRPCQueryTestSuite) TestQueryValidatorCommissionGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequestWithHeaders(tc.url, tc.headers)
 		s.Run(tc.name, func() {
 			if tc.expErr {
@@ -266,6 +264,7 @@ func (s *GRPCQueryTestSuite) TestQuerySlashesGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequest(tc.url)
 
 		s.Run(tc.name, func() {
@@ -341,6 +340,7 @@ func (s *GRPCQueryTestSuite) TestQueryDelegatorRewardsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequestWithHeaders(tc.url, tc.headers)
 
 		s.Run(tc.name, func() {
@@ -392,6 +392,7 @@ func (s *GRPCQueryTestSuite) TestQueryDelegatorValidatorsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequest(tc.url)
 
 		s.Run(tc.name, func() {
@@ -443,6 +444,7 @@ func (s *GRPCQueryTestSuite) TestQueryWithdrawAddressGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		resp, err := sdktestutil.GetRequest(tc.url)
 
 		s.Run(tc.name, func() {
@@ -487,9 +489,10 @@ func (s *GRPCQueryTestSuite) TestQueryValidatorCommunityPoolGRPC() {
 	}
 
 	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			resp, err := sdktestutil.GetRequestWithHeaders(tc.url, tc.headers)
+		tc := tc
+		resp, err := sdktestutil.GetRequestWithHeaders(tc.url, tc.headers)
 
+		s.Run(tc.name, func() {
 			if tc.expErr {
 				s.Require().Error(err)
 			} else {
@@ -499,61 +502,4 @@ func (s *GRPCQueryTestSuite) TestQueryValidatorCommunityPoolGRPC() {
 			}
 		})
 	}
-}
-
-func (s *GRPCQueryTestSuite) TestQueryResponseMeta() {
-	val := s.network.Validators[0]
-	baseURL := val.APIAddress
-	startHeight, err := s.network.LatestHeight()
-	s.Require().NoError(err)
-	// wait 1 block to ensure state is committed
-	s.Require().NoError(s.network.WaitForNextBlock())
-	// when
-	queryURL := fmt.Sprintf("%s/cosmos/distribution/v1beta1/validators/%s", baseURL, val.ValAddress.String())
-	_, headers, err := doRequest(queryURL, map[string]string{})
-	// then latest height is used
-	s.Require().NoError(err)
-	const heightRespHeaderKey = "X-Cosmos-Block-Height"
-	s.Require().Contains(headers, heightRespHeaderKey)
-	gotHeight, err := strconv.Atoi(headers[heightRespHeaderKey][0])
-	s.Require().NoError(err)
-	s.Assert().GreaterOrEqual(gotHeight, int(startHeight))
-
-	// and when called with height header
-	_, headers, err = doRequest(queryURL, map[string]string{"X-Cosmos-Block-Height": strconv.Itoa(int(startHeight))})
-	// then
-	s.Require().NoError(err)
-	s.Require().Contains(headers, heightRespHeaderKey)
-	gotHeight, err = strconv.Atoi(headers[heightRespHeaderKey][0])
-	s.Require().NoError(err)
-	s.Assert().Equal(int(startHeight), gotHeight)
-}
-
-func doRequest(url string, headers map[string]string) ([]byte, http.Header, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	client := &http.Client{}
-
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if err = res.Body.Close(); err != nil {
-		return nil, nil, err
-	}
-	fmt.Printf("headers: %v\n", res.Header)
-	return body, res.Header, nil
 }

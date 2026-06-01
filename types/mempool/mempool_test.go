@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	protov2 "google.golang.org/protobuf/proto"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -53,21 +52,6 @@ type testTx struct {
 	address  sdk.AccAddress
 	// useful for debugging
 	strAddress string
-	unordered  bool
-	timeout    *time.Time
-}
-
-// GetTimeoutTimeStamp implements types.TxWithUnordered.
-func (tx testTx) GetTimeoutTimeStamp() time.Time {
-	if tx.timeout == nil {
-		return time.Time{}
-	}
-	return *tx.timeout
-}
-
-// GetUnordered implements types.TxWithUnordered.
-func (tx testTx) GetUnordered() bool {
-	return tx.unordered
 }
 
 func (tx testTx) GetSigners() ([][]byte, error) { panic("not implemented") }
@@ -153,7 +137,7 @@ func (s *MempoolTestSuite) TestDefaultMempool() {
 	txCount := 1000
 	var txs []testTx
 
-	for i := range txCount {
+	for i := 0; i < txCount; i++ {
 		acc := accounts[i%len(accounts)]
 		tx := testTx{
 			nonce:    0,

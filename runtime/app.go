@@ -3,14 +3,15 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	abci "github.com/cometbft/cometbft/abci/types"
+	"golang.org/x/exp/slices"
 
 	runtimev1alpha1 "cosmossdk.io/api/cosmos/app/runtime/v1alpha1"
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	"cosmossdk.io/core/appmodule"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -22,7 +23,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -40,8 +40,7 @@ import (
 type App struct {
 	*baseapp.BaseApp
 
-	ModuleManager *module.Manager
-
+	ModuleManager     *module.Manager
 	configurator      module.Configurator
 	config            *runtimev1alpha1.Module
 	storeKeys         []storetypes.StoreKey
@@ -62,7 +61,7 @@ type App struct {
 // RegisterModules registers the provided modules with the module manager and
 // the basic module manager. This is the primary hook for integrating with
 // modules which are not registered using the app config.
-func (a *App) RegisterModules(modules ...module.AppModule) error { //nolint:staticcheck // needed for legacy compatibility
+func (a *App) RegisterModules(modules ...module.AppModule) error {
 	for _, appModule := range modules {
 		name := appModule.Name()
 		if _, ok := a.ModuleManager.Modules[name]; ok {
@@ -80,8 +79,8 @@ func (a *App) RegisterModules(modules ...module.AppModule) error { //nolint:stat
 
 		if module, ok := appModule.(module.HasServices); ok {
 			module.RegisterServices(a.configurator)
-		} else if innerMod, ok := appModule.(appmodule.HasServices); ok {
-			if err := innerMod.RegisterServices(a.configurator); err != nil {
+		} else if module, ok := appModule.(appmodule.HasServices); ok {
+			if err := module.RegisterServices(a.configurator); err != nil {
 				return err
 			}
 		}
@@ -92,7 +91,7 @@ func (a *App) RegisterModules(modules ...module.AppModule) error { //nolint:stat
 
 // RegisterStores registers the provided store keys.
 // This method should only be used for registering extra stores
-// which is necessary for modules that not registered using the app config.
+// wiich is necessary for modules that not registered using the app config.
 // To be used in combination of RegisterModules.
 func (a *App) RegisterStores(keys ...storetypes.StoreKey) error {
 	a.storeKeys = append(a.storeKeys, keys...)
@@ -157,7 +156,7 @@ func (a *App) Load(loadLatest bool) error {
 }
 
 // PreBlocker application updates every pre block
-func (a *App) PreBlocker(ctx sdk.Context, _ *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+func (a *App) PreBlocker(ctx sdk.Context, _ *abci.FinalizeBlockRequest) (*sdk.ResponsePreBlock, error) {
 	return a.ModuleManager.PreBlock(ctx)
 }
 
@@ -173,16 +172,16 @@ func (a *App) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
 
 // Precommiter application updates every commit
 func (a *App) Precommiter(ctx sdk.Context) {
-	_ = a.ModuleManager.Precommit(ctx)
+	a.ModuleManager.Precommit(ctx)
 }
 
 // PrepareCheckStater application updates every commit
 func (a *App) PrepareCheckStater(ctx sdk.Context) {
-	_ = a.ModuleManager.PrepareCheckState(ctx)
+	a.ModuleManager.PrepareCheckState(ctx)
 }
 
 // InitChainer initializes the chain.
-func (a *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+func (a *App) InitChainer(ctx sdk.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
 	var genesisState map[string]json.RawMessage
 	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
 		panic(err)
@@ -225,9 +224,7 @@ func (a *App) RegisterTendermintService(clientCtx client.Context) {
 
 // RegisterNodeService registers the node gRPC service on the app gRPC router.
 func (a *App) RegisterNodeService(clientCtx client.Context, cfg config.Config) {
-	nodeservice.RegisterNodeService(clientCtx, a.GRPCQueryRouter(), cfg, func() int64 {
-		return a.CommitMultiStore().EarliestVersion()
-	})
+	nodeservice.RegisterNodeService(clientCtx, a.GRPCQueryRouter(), cfg)
 }
 
 // Configurator returns the app's configurator.

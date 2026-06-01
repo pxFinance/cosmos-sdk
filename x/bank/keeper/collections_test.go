@@ -3,18 +3,18 @@ package keeper_test
 import (
 	"testing"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	cmttime "github.com/cometbft/cometbft/types/time"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	"cosmossdk.io/collections"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -26,12 +26,13 @@ import (
 
 func TestBankStateCompatibility(t *testing.T) {
 	key := storetypes.NewKVStoreKey(banktypes.StoreKey)
-	oKey := storetypes.NewObjectStoreKey(banktypes.ObjectStoreKey)
-	testCtx := testutil.DefaultContextWithObjectStore(t, key, storetypes.NewTransientStoreKey("transient_test"), oKey)
+	okey := storetypes.NewObjectStoreKey(banktypes.ObjectStoreKey)
+	testCtx := testutil.DefaultContextWithObjectStore(t, key, storetypes.NewTransientStoreKey("transient_test"), okey)
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
-
 	storeService := runtime.NewKVStoreService(key)
+	tkey := storetypes.NewTransientStoreKey(banktypes.TStoreKey)
+	tStoreService := runtime.NewTransientKVStoreService(tkey)
 
 	// gomock initializations
 	ctrl := gomock.NewController(t)
@@ -41,12 +42,13 @@ func TestBankStateCompatibility(t *testing.T) {
 	k := keeper.NewBaseKeeper(
 		encCfg.Codec,
 		storeService,
+		tStoreService,
+		okey,
 		authKeeper,
 		map[string]bool{accAddrs[4].String(): true},
 		authtypes.NewModuleAddress("gov").String(),
 		log.NewNopLogger(),
 	)
-	k = k.WithObjStoreKey(oKey)
 
 	// test we can decode balances without problems
 	// using the old value format of the denom to address index

@@ -9,7 +9,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
@@ -37,22 +37,19 @@ func TestInitApp(t *testing.T) {
 	appState, err := AppGenState(nil, genutiltypes.AppGenesis{}, nil)
 	require.NoError(t, err)
 
-	res, err := app.InitChain(&abci.RequestInitChain{
+	req := abci.InitChainRequest{
 		AppStateBytes: appState,
-	})
+	}
+	res, err := app.InitChain(&req)
 	require.NoError(t, err)
-
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Hash:   res.AppHash,
 		Height: 1,
 	})
-	require.NoError(t, err)
-
-	_, err = app.Commit()
-	require.NoError(t, err)
+	app.Commit()
 
 	// make sure we can query these values
-	query := abci.RequestQuery{
+	query := abci.QueryRequest{
 		Path: "/store/main/key",
 		Data: []byte("foo"),
 	}
@@ -75,7 +72,7 @@ func TestDeliverTx(t *testing.T) {
 	tx := NewTx(key, value, randomAccounts[0].Address)
 	txBytes := tx.GetSignBytes()
 
-	res, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	res, err := app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Hash:   []byte("apphash"),
 		Height: 1,
 		Txs:    [][]byte{txBytes},
@@ -87,7 +84,7 @@ func TestDeliverTx(t *testing.T) {
 	require.NoError(t, err)
 
 	// make sure we can query these values
-	query := abci.RequestQuery{
+	query := abci.QueryRequest{
 		Path: "/store/main/key",
 		Data: []byte(key),
 	}

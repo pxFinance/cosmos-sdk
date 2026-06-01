@@ -2,10 +2,11 @@ package runtime
 
 import (
 	"context"
+	"io"
 
 	"cosmossdk.io/core/store"
+	storetypes "cosmossdk.io/store/types"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -39,6 +40,10 @@ func NewTransientStoreService(storeKey *storetypes.TransientStoreKey) store.Tran
 
 type transientStoreService struct {
 	key *storetypes.TransientStoreKey
+}
+
+func NewTransientKVStoreService(tKey *storetypes.TransientStoreKey) store.TransientStoreService {
+	return &transientStoreService{key: tKey}
 }
 
 func (t transientStoreService) OpenTransientStore(ctx context.Context) store.KVStore {
@@ -106,6 +111,10 @@ type kvStoreAdapter struct {
 }
 
 func (kvStoreAdapter) CacheWrap() storetypes.CacheWrap {
+	panic("unimplemented")
+}
+
+func (kvStoreAdapter) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
 	panic("unimplemented")
 }
 

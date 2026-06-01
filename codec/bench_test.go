@@ -33,7 +33,8 @@ func BenchmarkLegacyGetSigners(b *testing.B) {
 		Amount:      nil,
 	}}
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_ = msg.GetSigners()
 	}
 }
@@ -49,7 +50,8 @@ func BenchmarkProtoreflectGetSigners(b *testing.B) {
 		Amount:      nil,
 	}
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_, err := signingCtx.GetSigners(msg)
 		if err != nil {
 			panic(err)
@@ -70,7 +72,8 @@ func BenchmarkProtoreflectGetSignersWithUnmarshal(b *testing.B) {
 	a, err := codectypes.NewAnyWithValue(msg)
 	require.NoError(b, err)
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_, _, err := cdc.GetMsgAnySigners(a)
 		if err != nil {
 			panic(err)
@@ -94,7 +97,8 @@ func BenchmarkProtoreflectGetSignersDynamicpb(b *testing.B) {
 	err = protov2.Unmarshal(bz, dynamicmsg)
 	require.NoError(b, err)
 
-	for b.Loop() {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_, err := signingCtx.GetSigners(dynamicmsg)
 		if err != nil {
 			panic(err)

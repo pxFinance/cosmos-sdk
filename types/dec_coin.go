@@ -24,9 +24,7 @@ func NewDecCoin(denom string, amount math.Int) DecCoin {
 
 // NewDecCoinFromDec creates a new DecCoin instance from a Dec.
 func NewDecCoinFromDec(denom string, amount math.LegacyDec) DecCoin {
-	if err := ValidateDenom(denom); err != nil {
-		panic(err)
-	}
+	mustValidateDenom(denom)
 
 	if amount.IsNegative() {
 		panic(fmt.Sprintf("negative decimal coin amount: %v\n", amount))
@@ -82,7 +80,6 @@ func (coin DecCoin) IsLT(other DecCoin) bool {
 }
 
 // IsEqual returns true if the two sets of Coins have the same value.
-//
 // Deprecated: Use DecCoin.Equal instead.
 func (coin DecCoin) IsEqual(other DecCoin) bool {
 	return coin.Equal(other)
@@ -456,6 +453,8 @@ func (coins DecCoins) Empty() bool {
 
 // AmountOf returns the amount of a denom from deccoins
 func (coins DecCoins) AmountOf(denom string) math.LegacyDec {
+	mustValidateDenom(denom)
+
 	switch len(coins) {
 	case 0:
 		return math.LegacyZeroDec()
@@ -491,7 +490,7 @@ func (coins DecCoins) Equal(coinsB DecCoins) bool {
 	coins = coins.Sort()
 	coinsB = coinsB.Sort()
 
-	for i := range coins {
+	for i := 0; i < len(coins); i++ {
 		if !coins[i].Equal(coinsB[i]) {
 			return false
 		}
@@ -640,13 +639,13 @@ func ParseDecCoin(coinStr string) (coin DecCoin, err error) {
 	}
 
 	if err := ValidateDenom(denomStr); err != nil {
-		return DecCoin{}, fmt.Errorf("invalid denom cannot contain spaces: %w", err)
+		return DecCoin{}, fmt.Errorf("invalid denom cannot contain spaces: %s", err)
 	}
 
 	return NewDecCoinFromDec(denomStr, amount), nil
 }
 
-// ParseDecCoins will parse out a list of decimal coins separated by commas. If the parsing is successful,
+// ParseDecCoins will parse out a list of decimal coins separated by commas. If the parsing is successuful,
 // the provided coins will be sanitized by removing zero coins and sorting the coin set. Lastly
 // a validation of the coin set is executed. If the check passes, ParseDecCoins will return the sanitized coins.
 // Otherwise it will return an error.

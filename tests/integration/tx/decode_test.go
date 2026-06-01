@@ -11,10 +11,14 @@ import (
 
 	msgv1 "cosmossdk.io/api/cosmos/msg/v1"
 	"cosmossdk.io/math"
+	"cosmossdk.io/x/evidence"
+	feegrantmodule "cosmossdk.io/x/feegrant/module"
+	"cosmossdk.io/x/tx/decode"
+	txsigning "cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/upgrade"
 
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	groupmodule "github.com/cosmos/cosmos-sdk/enterprise/group/x/group/module"
 	"github.com/cosmos/cosmos-sdk/tests/integration/rapidgen"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -28,15 +32,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	"github.com/cosmos/cosmos-sdk/x/consensus"
 	"github.com/cosmos/cosmos-sdk/x/distribution"
-	"github.com/cosmos/cosmos-sdk/x/evidence"
-	feegrantmodule "github.com/cosmos/cosmos-sdk/x/feegrant/module"
 	"github.com/cosmos/cosmos-sdk/x/gov"
+	groupmodule "github.com/cosmos/cosmos-sdk/x/group/module"
 	"github.com/cosmos/cosmos-sdk/x/mint"
+	"github.com/cosmos/cosmos-sdk/x/params"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	"github.com/cosmos/cosmos-sdk/x/staking"
-	"github.com/cosmos/cosmos-sdk/x/tx/decode"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
-	"github.com/cosmos/cosmos-sdk/x/upgrade"
 )
 
 // TestDecode tests that the tx decoder can decode all the txs in the test suite.
@@ -44,7 +45,7 @@ func TestDecode(t *testing.T) {
 	encCfg := testutil.MakeTestEncodingConfig(
 		auth.AppModuleBasic{}, authzmodule.AppModuleBasic{}, bank.AppModuleBasic{}, consensus.AppModuleBasic{},
 		distribution.AppModuleBasic{}, evidence.AppModuleBasic{}, feegrantmodule.AppModuleBasic{},
-		gov.AppModuleBasic{}, groupmodule.AppModuleBasic{}, mint.AppModuleBasic{},
+		gov.AppModuleBasic{}, groupmodule.AppModuleBasic{}, mint.AppModuleBasic{}, params.AppModuleBasic{},
 		slashing.AppModuleBasic{}, staking.AppModuleBasic{}, upgrade.AppModuleBasic{}, vesting.AppModuleBasic{})
 	legacytx.RegressionTestingAminoCodec = encCfg.Amino
 

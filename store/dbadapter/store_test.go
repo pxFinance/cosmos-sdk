@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/dbadapter"
-	"github.com/cosmos/cosmos-sdk/store/v2/mock"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/dbadapter"
+	"cosmossdk.io/store/mock"
+	"cosmossdk.io/store/types"
 )
 
 var errFoo = errors.New("dummy")
@@ -80,4 +80,7 @@ func TestCacheWraps(t *testing.T) {
 
 	cacheWrapper := store.CacheWrap()
 	require.IsType(t, &cachekv.Store{}, cacheWrapper)
+
+	cacheWrappedWithTrace := store.CacheWrapWithTrace(nil, nil)
+	require.IsType(t, &cachekv.Store{}, cacheWrappedWithTrace)
 }

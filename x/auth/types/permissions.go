@@ -2,7 +2,6 @@ package types
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -31,7 +30,12 @@ func NewPermissionsForAddress(name string, permissions []string) PermissionsForA
 
 // HasPermission returns whether the PermissionsForAddress contains permission.
 func (pa PermissionsForAddress) HasPermission(permission string) bool {
-	return slices.Contains(pa.permissions, permission)
+	for _, perm := range pa.permissions {
+		if perm == permission {
+			return true
+		}
+	}
+	return false
 }
 
 // GetAddress returns the address of the PermissionsForAddress object

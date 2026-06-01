@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/cosmos/btree"
+	"github.com/tidwall/btree"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/types"
 )
 
 var _ types.Iterator = (*memIterator[[]byte])(nil)
@@ -24,6 +24,15 @@ type memIterator[V any] struct {
 }
 
 func newMemIterator[V any](start, end []byte, items BTree[V], ascending bool) *memIterator[V] {
+	if items.tree == nil {
+		return &memIterator[V]{
+			start:     start,
+			end:       end,
+			ascending: ascending,
+			valid:     false,
+		}
+	}
+
 	var (
 		valid bool
 		empty V

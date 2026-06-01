@@ -64,7 +64,7 @@ func (p Params) Validate() error {
 	return nil
 }
 
-func validateSignedBlocksWindow(i any) error {
+func validateSignedBlocksWindow(i interface{}) error {
 	v, ok := i.(int64)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -77,7 +77,7 @@ func validateSignedBlocksWindow(i any) error {
 	return nil
 }
 
-func validateMinSignedPerWindow(i any) error {
+func validateMinSignedPerWindow(i interface{}) error {
 	v, ok := i.(math.LegacyDec)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -96,7 +96,7 @@ func validateMinSignedPerWindow(i any) error {
 	return nil
 }
 
-func validateDowntimeJailDuration(i any) error {
+func validateDowntimeJailDuration(i interface{}) error {
 	v, ok := i.(time.Duration)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -109,7 +109,7 @@ func validateDowntimeJailDuration(i any) error {
 	return nil
 }
 
-func validateSlashFractionDoubleSign(i any) error {
+func validateSlashFractionDoubleSign(i interface{}) error {
 	v, ok := i.(math.LegacyDec)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -128,7 +128,7 @@ func validateSlashFractionDoubleSign(i any) error {
 	return nil
 }
 
-func validateSlashFractionDowntime(i any) error {
+func validateSlashFractionDowntime(i interface{}) error {
 	v, ok := i.(math.LegacyDec)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)

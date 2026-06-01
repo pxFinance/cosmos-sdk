@@ -6,13 +6,17 @@ import (
 	authmodulev1 "cosmossdk.io/api/cosmos/auth/module/v1"
 	authzmodulev1 "cosmossdk.io/api/cosmos/authz/module/v1"
 	bankmodulev1 "cosmossdk.io/api/cosmos/bank/module/v1"
+	circuitmodulev1 "cosmossdk.io/api/cosmos/circuit/module/v1"
 	consensusmodulev1 "cosmossdk.io/api/cosmos/consensus/module/v1"
 	distrmodulev1 "cosmossdk.io/api/cosmos/distribution/module/v1"
 	evidencemodulev1 "cosmossdk.io/api/cosmos/evidence/module/v1"
 	feegrantmodulev1 "cosmossdk.io/api/cosmos/feegrant/module/v1"
 	genutilmodulev1 "cosmossdk.io/api/cosmos/genutil/module/v1"
 	govmodulev1 "cosmossdk.io/api/cosmos/gov/module/v1"
+	groupmodulev1 "cosmossdk.io/api/cosmos/group/module/v1"
 	mintmodulev1 "cosmossdk.io/api/cosmos/mint/module/v1"
+	nftmodulev1 "cosmossdk.io/api/cosmos/nft/module/v1"
+	paramsmodulev1 "cosmossdk.io/api/cosmos/params/module/v1"
 	slashingmodulev1 "cosmossdk.io/api/cosmos/slashing/module/v1"
 	stakingmodulev1 "cosmossdk.io/api/cosmos/staking/module/v1"
 	txconfigv1 "cosmossdk.io/api/cosmos/tx/config/v1"
@@ -32,10 +36,9 @@ type Config struct {
 }
 
 func defaultConfig() *Config {
-	cfg := &Config{
+	return &Config{
 		ModuleConfigs: make(map[string]*appv1alpha1.ModuleConfig),
 		PreBlockersOrder: []string{
-			"auth",
 			"upgrade",
 		},
 		BeginBlockersOrder: []string{
@@ -47,15 +50,19 @@ func defaultConfig() *Config {
 			"auth",
 			"bank",
 			"gov",
+			"crisis",
 			"genutil",
 			"authz",
 			"feegrant",
-			"consensus",
-			"vesting",
 			"nft",
 			"group",
+			"params",
+			"consensus",
+			"vesting",
+			"circuit",
 		},
 		EndBlockersOrder: []string{
+			"crisis",
 			"gov",
 			"staking",
 			"auth",
@@ -67,11 +74,13 @@ func defaultConfig() *Config {
 			"evidence",
 			"authz",
 			"feegrant",
+			"nft",
+			"group",
+			"params",
 			"consensus",
 			"upgrade",
 			"vesting",
-			"nft",
-			"group",
+			"circuit",
 		},
 		InitGenesisOrder: []string{
 			"auth",
@@ -81,20 +90,21 @@ func defaultConfig() *Config {
 			"slashing",
 			"gov",
 			"mint",
+			"crisis",
 			"genutil",
 			"evidence",
 			"authz",
 			"feegrant",
+			"nft",
+			"group",
+			"params",
 			"consensus",
 			"upgrade",
 			"vesting",
-			"nft",
-			"group",
+			"circuit",
 		},
 		setInitGenesis: true,
 	}
-
-	return cfg
 }
 
 type ModuleOption func(config *Config)
@@ -148,6 +158,15 @@ func AuthModule() ModuleOption {
 					{Account: "nft"},
 				},
 			}),
+		}
+	}
+}
+
+func ParamsModule() ModuleOption {
+	return func(config *Config) {
+		config.ModuleConfigs["params"] = &appv1alpha1.ModuleConfig{
+			Name:   "params",
+			Config: appconfig.WrapAny(&paramsmodulev1.Module{}),
 		}
 	}
 }
@@ -262,6 +281,33 @@ func AuthzModule() ModuleOption {
 		config.ModuleConfigs["authz"] = &appv1alpha1.ModuleConfig{
 			Name:   "authz",
 			Config: appconfig.WrapAny(&authzmodulev1.Module{}),
+		}
+	}
+}
+
+func GroupModule() ModuleOption {
+	return func(config *Config) {
+		config.ModuleConfigs["group"] = &appv1alpha1.ModuleConfig{
+			Name:   "group",
+			Config: appconfig.WrapAny(&groupmodulev1.Module{}),
+		}
+	}
+}
+
+func NFTModule() ModuleOption {
+	return func(config *Config) {
+		config.ModuleConfigs["nft"] = &appv1alpha1.ModuleConfig{
+			Name:   "nft",
+			Config: appconfig.WrapAny(&nftmodulev1.Module{}),
+		}
+	}
+}
+
+func CircuitModule() ModuleOption {
+	return func(config *Config) {
+		config.ModuleConfigs["circuit"] = &appv1alpha1.ModuleConfig{
+			Name:   "circuit",
+			Config: appconfig.WrapAny(&circuitmodulev1.Module{}),
 		}
 	}
 }

@@ -48,7 +48,7 @@ func NewProposal(messages []sdk.Msg, id uint64, submitTime, depositEndTime time.
 	return p, nil
 }
 
-// GetMsgs returns the proposal messages
+// GetMessages returns the proposal messages
 func (p Proposal) GetMsgs() ([]sdk.Msg, error) {
 	return sdktx.GetMsgs(p.Messages, "sdk.MsgProposal")
 }
@@ -112,10 +112,10 @@ func ProposalStatusFromString(str string) (ProposalStatus, error) {
 func (status ProposalStatus) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 's':
-		_, _ = s.Write([]byte(status.String()))
+		s.Write([]byte(status.String()))
 	default:
 		// TODO: Do this conversion more directly
-		_, _ = fmt.Fprintf(s, "%v", byte(status))
+		s.Write([]byte(fmt.Sprintf("%v", byte(status))))
 	}
 }
 

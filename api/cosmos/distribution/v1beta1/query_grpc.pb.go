@@ -29,9 +29,6 @@ const (
 	Query_DelegatorValidators_FullMethodName         = "/cosmos.distribution.v1beta1.Query/DelegatorValidators"
 	Query_DelegatorWithdrawAddress_FullMethodName    = "/cosmos.distribution.v1beta1.Query/DelegatorWithdrawAddress"
 	Query_CommunityPool_FullMethodName               = "/cosmos.distribution.v1beta1.Query/CommunityPool"
-	Query_ValidatorHistoricalRewards_FullMethodName  = "/cosmos.distribution.v1beta1.Query/ValidatorHistoricalRewards"
-	Query_ValidatorCurrentRewards_FullMethodName     = "/cosmos.distribution.v1beta1.Query/ValidatorCurrentRewards"
-	Query_DelegatorStartingInfo_FullMethodName       = "/cosmos.distribution.v1beta1.Query/DelegatorStartingInfo"
 )
 
 // QueryClient is the client API for Query service.
@@ -59,12 +56,6 @@ type QueryClient interface {
 	DelegatorWithdrawAddress(ctx context.Context, in *QueryDelegatorWithdrawAddressRequest, opts ...grpc.CallOption) (*QueryDelegatorWithdrawAddressResponse, error)
 	// CommunityPool queries the community pool coins.
 	CommunityPool(ctx context.Context, in *QueryCommunityPoolRequest, opts ...grpc.CallOption) (*QueryCommunityPoolResponse, error)
-	// ValidatorHistoricalRewards queries historical rewards for a validator at a specific period.
-	ValidatorHistoricalRewards(ctx context.Context, in *QueryValidatorHistoricalRewardsRequest, opts ...grpc.CallOption) (*QueryValidatorHistoricalRewardsResponse, error)
-	// ValidatorCurrentRewards queries current rewards for a validator.
-	ValidatorCurrentRewards(ctx context.Context, in *QueryValidatorCurrentRewardsRequest, opts ...grpc.CallOption) (*QueryValidatorCurrentRewardsResponse, error)
-	// DelegatorStartingInfo queries the starting info for a delegator.
-	DelegatorStartingInfo(ctx context.Context, in *QueryDelegatorStartingInfoRequest, opts ...grpc.CallOption) (*QueryDelegatorStartingInfoResponse, error)
 }
 
 type queryClient struct {
@@ -165,33 +156,6 @@ func (c *queryClient) CommunityPool(ctx context.Context, in *QueryCommunityPoolR
 	return out, nil
 }
 
-func (c *queryClient) ValidatorHistoricalRewards(ctx context.Context, in *QueryValidatorHistoricalRewardsRequest, opts ...grpc.CallOption) (*QueryValidatorHistoricalRewardsResponse, error) {
-	out := new(QueryValidatorHistoricalRewardsResponse)
-	err := c.cc.Invoke(ctx, Query_ValidatorHistoricalRewards_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *queryClient) ValidatorCurrentRewards(ctx context.Context, in *QueryValidatorCurrentRewardsRequest, opts ...grpc.CallOption) (*QueryValidatorCurrentRewardsResponse, error) {
-	out := new(QueryValidatorCurrentRewardsResponse)
-	err := c.cc.Invoke(ctx, Query_ValidatorCurrentRewards_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *queryClient) DelegatorStartingInfo(ctx context.Context, in *QueryDelegatorStartingInfoRequest, opts ...grpc.CallOption) (*QueryDelegatorStartingInfoResponse, error) {
-	out := new(QueryDelegatorStartingInfoResponse)
-	err := c.cc.Invoke(ctx, Query_DelegatorStartingInfo_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -217,12 +181,6 @@ type QueryServer interface {
 	DelegatorWithdrawAddress(context.Context, *QueryDelegatorWithdrawAddressRequest) (*QueryDelegatorWithdrawAddressResponse, error)
 	// CommunityPool queries the community pool coins.
 	CommunityPool(context.Context, *QueryCommunityPoolRequest) (*QueryCommunityPoolResponse, error)
-	// ValidatorHistoricalRewards queries historical rewards for a validator at a specific period.
-	ValidatorHistoricalRewards(context.Context, *QueryValidatorHistoricalRewardsRequest) (*QueryValidatorHistoricalRewardsResponse, error)
-	// ValidatorCurrentRewards queries current rewards for a validator.
-	ValidatorCurrentRewards(context.Context, *QueryValidatorCurrentRewardsRequest) (*QueryValidatorCurrentRewardsResponse, error)
-	// DelegatorStartingInfo queries the starting info for a delegator.
-	DelegatorStartingInfo(context.Context, *QueryDelegatorStartingInfoRequest) (*QueryDelegatorStartingInfoResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -259,15 +217,6 @@ func (UnimplementedQueryServer) DelegatorWithdrawAddress(context.Context, *Query
 }
 func (UnimplementedQueryServer) CommunityPool(context.Context, *QueryCommunityPoolRequest) (*QueryCommunityPoolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommunityPool not implemented")
-}
-func (UnimplementedQueryServer) ValidatorHistoricalRewards(context.Context, *QueryValidatorHistoricalRewardsRequest) (*QueryValidatorHistoricalRewardsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidatorHistoricalRewards not implemented")
-}
-func (UnimplementedQueryServer) ValidatorCurrentRewards(context.Context, *QueryValidatorCurrentRewardsRequest) (*QueryValidatorCurrentRewardsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidatorCurrentRewards not implemented")
-}
-func (UnimplementedQueryServer) DelegatorStartingInfo(context.Context, *QueryDelegatorStartingInfoRequest) (*QueryDelegatorStartingInfoResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DelegatorStartingInfo not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -462,60 +411,6 @@ func _Query_CommunityPool_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ValidatorHistoricalRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryValidatorHistoricalRewardsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ValidatorHistoricalRewards(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Query_ValidatorHistoricalRewards_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ValidatorHistoricalRewards(ctx, req.(*QueryValidatorHistoricalRewardsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Query_ValidatorCurrentRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryValidatorCurrentRewardsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ValidatorCurrentRewards(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Query_ValidatorCurrentRewards_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ValidatorCurrentRewards(ctx, req.(*QueryValidatorCurrentRewardsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Query_DelegatorStartingInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryDelegatorStartingInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).DelegatorStartingInfo(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Query_DelegatorStartingInfo_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).DelegatorStartingInfo(ctx, req.(*QueryDelegatorStartingInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -562,18 +457,6 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommunityPool",
 			Handler:    _Query_CommunityPool_Handler,
-		},
-		{
-			MethodName: "ValidatorHistoricalRewards",
-			Handler:    _Query_ValidatorHistoricalRewards_Handler,
-		},
-		{
-			MethodName: "ValidatorCurrentRewards",
-			Handler:    _Query_ValidatorCurrentRewards_Handler,
-		},
-		{
-			MethodName: "DelegatorStartingInfo",
-			Handler:    _Query_DelegatorStartingInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

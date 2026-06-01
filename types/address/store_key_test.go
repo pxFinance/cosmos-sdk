@@ -32,6 +32,7 @@ func (suite *StoreKeySuite) TestLengthPrefix() {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		suite.Run(tt.name, func() {
 			storeKey, err := address.LengthPrefix(tt.addr)
 			if tt.expErr {

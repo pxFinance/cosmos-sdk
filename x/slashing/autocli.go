@@ -46,13 +46,8 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Example:   fmt.Sprintf("%s tx slashing unjail --from [validator]", version.AppName),
 				},
 				{
-					RpcMethod:      "UpdateParams",
-					Use:            "update-params-proposal [params]",
-					Short:          "Submit a proposal to update slashing module params. Note: the entire params must be provided.",
-					Long:           fmt.Sprintf("Submit a proposal to update slashing module params. Note: the entire params must be provided.\n See the fields to fill in by running `%s query slashing params --output json`", version.AppName),
-					Example:        fmt.Sprintf(`%s tx slashing update-params-proposal '{ "signed_blocks_window": "100", ... }'`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "params"}},
-					GovProposal:    true,
+					RpcMethod: "UpdateParams",
+					Skip:      true, // skipped because authority gated
 				},
 			},
 		},

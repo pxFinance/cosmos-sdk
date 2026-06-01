@@ -3,10 +3,13 @@ package v1beta1
 import (
 	"fmt"
 
+	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/gogoproto/proto"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/x/gov/types"
 )
 
 // Governance message types and routes
@@ -69,6 +72,32 @@ func (m *MsgSubmitProposal) SetContent(content Content) error {
 		return err
 	}
 	m.Content = any
+	return nil
+}
+
+// ValidateBasic implements the sdk.Msg interface.
+func (m MsgSubmitProposal) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Proposer); err != nil {
+		return sdkerrors.ErrInvalidAddress.Wrapf("invalid proposer address: %s", err)
+	}
+	if !m.InitialDeposit.IsValid() {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidCoins, m.InitialDeposit.String())
+	}
+	if m.InitialDeposit.IsAnyNegative() {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidCoins, m.InitialDeposit.String())
+	}
+
+	content := m.GetContent()
+	if content == nil {
+		return errorsmod.Wrap(types.ErrInvalidProposalContent, "missing content")
+	}
+	if !IsValidProposalType(content.ProposalType()) {
+		return errorsmod.Wrap(types.ErrInvalidProposalType, content.ProposalType())
+	}
+	if err := content.ValidateBasic(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

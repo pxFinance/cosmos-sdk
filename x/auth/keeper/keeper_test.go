@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/core/header"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -32,17 +32,6 @@ var (
 	randomPermAcc = types.NewEmptyModuleAccount(randomPerm, "random")
 )
 
-func getMaccPerms() map[string][]string {
-	return map[string][]string{
-		"fee_collector":          nil,
-		"mint":                   {"minter"},
-		"bonded_tokens_pool":     {"burner", "staking"},
-		"not_bonded_tokens_pool": {"burner", "staking"},
-		multiPerm:                {"burner", "minter", "staking"},
-		randomPerm:               {"random"},
-	}
-}
-
 type KeeperTestSuite struct {
 	suite.Suite
 
@@ -62,11 +51,20 @@ func (suite *KeeperTestSuite) SetupTest() {
 	testCtx := testutil.DefaultContextWithDB(suite.T(), key, storetypes.NewTransientStoreKey("transient_test"))
 	suite.ctx = testCtx.Ctx.WithHeaderInfo(header.Info{})
 
+	maccPerms := map[string][]string{
+		"fee_collector":          nil,
+		"mint":                   {"minter"},
+		"bonded_tokens_pool":     {"burner", "staking"},
+		"not_bonded_tokens_pool": {"burner", "staking"},
+		multiPerm:                {"burner", "minter", "staking"},
+		randomPerm:               {"random"},
+	}
+
 	suite.accountKeeper = keeper.NewAccountKeeper(
 		suite.encCfg.Codec,
 		storeService,
 		types.ProtoBaseAccount,
-		getMaccPerms(),
+		maccPerms,
 		authcodec.NewBech32Codec("cosmos"),
 		"cosmos",
 		types.NewModuleAddress("gov").String(),
@@ -160,7 +158,7 @@ func (suite *KeeperTestSuite) TestInitGenesis() {
 	keeperAccts := suite.accountKeeper.GetAllAccounts(ctx)
 	// len(accts)+1 because we initialize fee_collector account after the genState accounts
 	suite.Require().Equal(len(keeperAccts), len(accts)+1, "number of accounts in the keeper vs in genesis state")
-	for _, genAcct := range accts {
+	for i, genAcct := range accts {
 		genAcctAddr := genAcct.GetAddress()
 		var keeperAcct sdk.AccountI
 		for _, kacct := range keeperAccts {
@@ -172,31 +170,24 @@ func (suite *KeeperTestSuite) TestInitGenesis() {
 		suite.Require().NotNilf(keeperAcct, "genesis account %s not in keeper accounts", genAcctAddr)
 		suite.Require().Equal(genAcct.GetPubKey(), keeperAcct.GetPubKey())
 		suite.Require().Equal(genAcct.GetSequence(), keeperAcct.GetSequence())
+		if i == 1 {
+			suite.Require().Equalf(1, int(keeperAcct.GetAccountNumber()), genAcctAddr.String())
+		} else {
+			suite.Require().Equal(genAcct.GetSequence(), keeperAcct.GetSequence())
+		}
 	}
 
-	// fee_collector module account should be created during InitGenesis
+	// fee_collector's is the last account to be set, so it has +1 of the highest in the accounts list
 	feeCollector := suite.accountKeeper.GetModuleAccount(ctx, "fee_collector")
-	suite.Require().NotNil(feeCollector)
-	// Hash-based IDs always have top bit set
-	suite.Require().NotZero(feeCollector.GetAccountNumber()&(uint64(1)<<63), "fee_collector account number should have top bit set")
+	suite.Require().Equal(6, int(feeCollector.GetAccountNumber()))
 
-	// NextAccountNumber should produce a hash-based ID (top bit set) for any account
-	acc := types.NewBaseAccountWithAddress(sdk.AccAddress(pubKey1.Address()))
-	nextNum := suite.accountKeeper.NextAccountNumber(ctx, acc)
-	suite.Require().NotZero(nextNum&(uint64(1)<<63), "NextAccountNumber should produce hash-based ID with top bit set")
-
-	// NextAccountNumber is deterministic: same context + same account => same ID
-	nextNum2 := suite.accountKeeper.NextAccountNumber(ctx, acc)
-	suite.Require().Equal(nextNum, nextNum2, "NextAccountNumber should be deterministic")
-
-	// Different accounts in the same context get different IDs
-	acc2 := types.NewBaseAccountWithAddress(sdk.AccAddress(pubKey2.Address()))
-	nextNum3 := suite.accountKeeper.NextAccountNumber(ctx, acc2)
-	suite.Require().NotEqual(nextNum, nextNum3, "different addresses should produce different IDs")
+	// The 3rd account has account number 5, but because the FeeCollector account gets initialized last, the next should be 7.
+	nextNum := suite.accountKeeper.NextAccountNumber(ctx)
+	suite.Require().Equal(7, int(nextNum))
 
 	suite.SetupTest() // reset
 	ctx = suite.ctx
-	// one zero account still gets set via genesis
+	// one zero account still sets global account number
 	genState = types.GenesisState{
 		Params: types.DefaultParams(),
 		Accounts: []*codectypes.Any{
@@ -212,13 +203,15 @@ func (suite *KeeperTestSuite) TestInitGenesis() {
 	suite.accountKeeper.InitGenesis(ctx, genState)
 
 	keeperAccts = suite.accountKeeper.GetAllAccounts(ctx)
-	// len(genState.Accounts)+1 because we initialize fee_collector after the genState accounts
+	// len(genState.Accounts)+1 because we initialize fee_collector as account number 1 (last)
 	suite.Require().Equal(len(keeperAccts), len(genState.Accounts)+1, "number of accounts in the keeper vs in genesis state")
 
-	// Genesis account retains its explicit account number
+	// Check both accounts account numbers
 	suite.Require().Equal(0, int(suite.accountKeeper.GetAccount(ctx, sdk.AccAddress(pubKey1.Address())).GetAccountNumber()))
-	// fee_collector gets a hash-based ID
 	feeCollector = suite.accountKeeper.GetModuleAccount(ctx, "fee_collector")
-	suite.Require().NotNil(feeCollector)
-	suite.Require().NotZero(feeCollector.GetAccountNumber()&(uint64(1)<<63), "fee_collector should have hash-based ID")
+	suite.Require().Equal(1, int(feeCollector.GetAccountNumber()))
+
+	nextNum = suite.accountKeeper.NextAccountNumber(ctx)
+	// we expect nextNum to be 2 because we initialize fee_collector as account number 1
+	suite.Require().Equal(2, int(nextNum))
 }

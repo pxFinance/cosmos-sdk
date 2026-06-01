@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -21,8 +21,6 @@ var header = cmtproto.Header{
 }
 
 func createValidators(t *testing.T) []types.Validator {
-	t.Helper()
-
 	return []types.Validator{
 		newValidator(t, valAddr1, pk1),
 		newValidator(t, valAddr2, pk2),

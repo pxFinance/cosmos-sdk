@@ -12,14 +12,15 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	pruningtypes "cosmossdk.io/store/pruning/types"
 
 	bam "github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
 	"github.com/cosmos/cosmos-sdk/testutil/mock"
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -42,8 +43,9 @@ func setup(withGenesis bool, invCheckPeriod uint) (*SimApp, GenesisState) {
 
 	appOptions := make(simtestutil.AppOptionsMap, 0)
 	appOptions[flags.FlagHome] = DefaultNodeHome
+	appOptions[server.FlagInvCheckPeriod] = invCheckPeriod
 
-	app := NewSimApp(log.NewNopLogger(), db, true, appOptions)
+	app := NewSimApp(log.NewNopLogger(), db, nil, true, appOptions)
 	if withGenesis {
 		return app, app.DefaultGenesis()
 	}
@@ -69,7 +71,7 @@ func NewSimappWithCustomOptions(t *testing.T, isCheckTx bool, options SetupOptio
 		Coins:   sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100000000000000))),
 	}
 
-	app := NewSimApp(options.Logger, options.DB, true, options.AppOpts)
+	app := NewSimApp(options.Logger, options.DB, nil, true, options.AppOpts)
 	genesisState := app.DefaultGenesis()
 	genesisState, err = simtestutil.GenesisStateWithValSet(app.AppCodec(), genesisState, valSet, []authtypes.GenesisAccount{acc}, balance)
 	require.NoError(t, err)
@@ -80,7 +82,7 @@ func NewSimappWithCustomOptions(t *testing.T, isCheckTx bool, options SetupOptio
 		require.NoError(t, err)
 
 		// Initialize the chain
-		_, err = app.InitChain(&abci.RequestInitChain{
+		_, err = app.InitChain(&abci.InitChainRequest{
 			Validators:      []abci.ValidatorUpdate{},
 			ConsensusParams: simtestutil.DefaultConsensusParams,
 			AppStateBytes:   stateBytes,
@@ -131,7 +133,7 @@ func SetupWithGenesisValSet(t *testing.T, valSet *cmttypes.ValidatorSet, genAccs
 	require.NoError(t, err)
 
 	// init chain will set the validator set and initialize the genesis accounts
-	_, err = app.InitChain(&abci.RequestInitChain{
+	_, err = app.InitChain(&abci.InitChainRequest{
 		Validators:      []abci.ValidatorUpdate{},
 		ConsensusParams: simtestutil.DefaultConsensusParams,
 		AppStateBytes:   stateBytes,
@@ -140,7 +142,7 @@ func SetupWithGenesisValSet(t *testing.T, valSet *cmttypes.ValidatorSet, genAccs
 	require.NoError(t, err)
 
 	require.NoError(t, err)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	_, err = app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height:             app.LastBlockHeight() + 1,
 		Hash:               app.LastCommitID().Hash,
 		NextValidatorsHash: valSet.Hash(),
@@ -222,11 +224,11 @@ func NewTestNetworkFixture() network.TestFixture {
 	}
 	defer os.RemoveAll(dir)
 
-	app := NewSimApp(log.NewNopLogger(), dbm.NewMemDB(), true, simtestutil.NewAppOptionsWithFlagHome(dir))
+	app := NewSimApp(log.NewNopLogger(), dbm.NewMemDB(), nil, true, simtestutil.NewAppOptionsWithFlagHome(dir))
 
 	appCtr := func(val network.ValidatorI) servertypes.Application {
 		return NewSimApp(
-			val.GetCtx().Logger, dbm.NewMemDB(), true,
+			val.GetCtx().Logger, dbm.NewMemDB(), nil, true,
 			simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
 			bam.SetPruning(pruningtypes.NewPruningOptionsFromString(val.GetAppConfig().Pruning)),
 			bam.SetMinGasPrices(val.GetAppConfig().MinGasPrices),

@@ -3,15 +3,15 @@ package keeper_test
 import (
 	"testing"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -38,7 +38,6 @@ func TestCalculateRewardsBasic(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -124,7 +123,6 @@ func TestCalculateRewardsAfterSlash(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -228,7 +226,6 @@ func TestCalculateRewardsAfterManySlashes(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -353,7 +350,6 @@ func TestCalculateRewardsMultiDelegator(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -451,7 +447,6 @@ func TestWithdrawDelegationRewardsBasic(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -527,7 +522,6 @@ func TestCalculateRewardsAfterManySlashesInSameBlock(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -644,7 +638,6 @@ func TestCalculateRewardsMultiDelegatorMultiSlash(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -767,7 +760,7 @@ func TestCalculateRewardsMultiDelegatorMultiSlash(t *testing.T) {
 	require.Equal(t, sdk.DecCoins{{Denom: sdk.DefaultBondDenom, Amount: initial}}, valCommission.Commission)
 }
 
-func TestCalculateRewardsMultiDelegatorMultiWithdraw(t *testing.T) {
+func TestCalculateRewardsMultiDelegatorMultWithdraw(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	key := storetypes.NewKVStoreKey(disttypes.StoreKey)
 	storeService := runtime.NewKVStoreService(key)
@@ -782,7 +775,6 @@ func TestCalculateRewardsMultiDelegatorMultiWithdraw(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -982,7 +974,6 @@ func Test100PercentCommissionReward(t *testing.T) {
 	accountKeeper.EXPECT().GetModuleAddress("distribution").Return(distrAcc.GetAddress())
 	stakingKeeper.EXPECT().ValidatorAddressCodec().Return(address.NewBech32Codec(sdk.Bech32PrefixValAddr)).AnyTimes()
 	accountKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec(sdk.Bech32MainPrefix)).AnyTimes()
-	bankKeeper.EXPECT().BlockedAddr(gomock.Any()).Return(false).AnyTimes()
 
 	distrKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -998,7 +989,7 @@ func Test100PercentCommissionReward(t *testing.T) {
 	require.NoError(t, distrKeeper.FeePool.Set(ctx, disttypes.InitialFeePool()))
 	require.NoError(t, distrKeeper.Params.Set(ctx, disttypes.DefaultParams()))
 
-	// create validator with 100% commission
+	// create validator with 50% commission
 	valAddr := sdk.ValAddress(valConsAddr0)
 	addr := sdk.AccAddress(valAddr)
 	val, err := distrtestutil.CreateValidator(valConsPk0, math.NewInt(100))

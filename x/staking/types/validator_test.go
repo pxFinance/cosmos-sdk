@@ -64,7 +64,7 @@ func TestABCIValidatorUpdate(t *testing.T) {
 	abciVal := validator.ABCIValidatorUpdate(sdk.DefaultPowerReduction)
 	pk, err := validator.TmConsPublicKey()
 	require.NoError(t, err)
-	require.Equal(t, pk, abciVal.PubKey)
+	require.Equal(t, pk.GetEd25519(), abciVal.PubKeyBytes)
 	require.Equal(t, validator.BondedTokens().Int64(), abciVal.Power)
 }
 
@@ -73,7 +73,7 @@ func TestABCIValidatorUpdateZero(t *testing.T) {
 	abciVal := validator.ABCIValidatorUpdateZero()
 	pk, err := validator.TmConsPublicKey()
 	require.NoError(t, err)
-	require.Equal(t, pk, abciVal.PubKey)
+	require.Equal(t, pk.GetEd25519(), abciVal.PubKeyBytes)
 	require.Equal(t, int64(0), abciVal.Power)
 }
 
@@ -93,7 +93,7 @@ func TestRemoveTokens(t *testing.T) {
 	validator = validator.RemoveTokens(math.NewInt(10))
 	require.Equal(t, int64(90), validator.Tokens.Int64())
 
-	// update validator from bonded -> unbonded
+	// update validator to from bonded -> unbonded
 	validator = validator.UpdateStatus(types.Unbonded)
 	require.Equal(t, types.Unbonded, validator.Status)
 
@@ -261,7 +261,7 @@ func TestValidatorsSortDeterminism(t *testing.T) {
 	copy(sortedVals, vals)
 
 	// Randomly shuffle validators, sort, and check it is equal to original sort
-	for range 10 {
+	for i := 0; i < 10; i++ {
 		rand.Shuffle(10, func(i, j int) {
 			vals[i], vals[j] = vals[j], vals[i]
 		})
@@ -283,7 +283,7 @@ func TestValidatorsSortCometBFT(t *testing.T) {
 		vals[i].Tokens = math.NewInt(rand.Int63())
 	}
 	// create some validators with the same power
-	for i := range 10 {
+	for i := 0; i < 10; i++ {
 		vals[i].Tokens = math.NewInt(1000000)
 	}
 
@@ -308,7 +308,7 @@ func TestValidatorToCmt(t *testing.T) {
 	vals := types.Validators{}
 	expected := make([]*cmttypes.Validator, 10)
 
-	for i := range 10 {
+	for i := 0; i < 10; i++ {
 		pk := ed25519.GenPrivKey().PubKey()
 		val := newValidator(t, sdk.ValAddress(pk.Address()), pk)
 		val.Status = types.Bonded

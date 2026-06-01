@@ -8,10 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/math/unsafe"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/dbadapter"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/dbadapter"
+	"cosmossdk.io/store/types"
 )
 
 func newCacheKVStore() types.CacheKVStore {
@@ -33,7 +32,7 @@ func TestCacheKVStore(t *testing.T) {
 	st.Set(keyFmt(1), valFmt(1))
 	require.Equal(t, valFmt(1), st.Get(keyFmt(1)))
 
-	// update it in cache, shouldn't change mem
+	// update it in cache, shoudn't change mem
 	st.Set(keyFmt(1), valFmt(2))
 	require.Equal(t, valFmt(2), st.Get(keyFmt(1)))
 	require.Equal(t, valFmt(1), mem.Get(keyFmt(1)))
@@ -92,7 +91,7 @@ func TestCacheKVStoreNested(t *testing.T) {
 	require.Equal(t, valFmt(1), st.Get(keyFmt(1)))
 	require.Equal(t, valFmt(3), st2.Get(keyFmt(1)))
 
-	// st2 writes to its parent, st. doesn't effect mem
+	// st2 writes to its parent, st. doesnt effect mem
 	st2.Write()
 	require.Equal(t, []byte(nil), mem.Get(keyFmt(1)))
 	require.Equal(t, valFmt(3), st.Get(keyFmt(1)))
@@ -239,13 +238,13 @@ func TestCacheKVMergeIteratorBasics(t *testing.T) {
 	st.Write()
 	assertIterateDomain(t, st, 0)
 
-	// add two keys and assert they're there
+	// add two keys and assert theyre there
 	k1, v1 := keyFmt(1), valFmt(1)
 	st.Set(k, v)
 	st.Set(k1, v1)
 	assertIterateDomain(t, st, 2)
 
-	// write it and assert they're there
+	// write it and assert theyre there
 	st.Write()
 	assertIterateDomain(t, st, 2)
 
@@ -448,6 +447,20 @@ func TestIteratorDeadlock(t *testing.T) {
 	defer it2.Close()
 }
 
+func TestBranchStore(t *testing.T) {
+	mem := dbadapter.Store{DB: dbm.NewMemDB()}
+	store := cachekv.NewStore(mem)
+
+	store.Set([]byte("key1"), []byte("value1"))
+
+	branch := store.Clone().(types.CacheKVStore)
+	branch.Set([]byte("key1"), []byte("value2"))
+
+	require.Equal(t, []byte("value1"), store.Get([]byte("key1")))
+	store.Restore(branch.(types.BranchStore))
+	require.Equal(t, []byte("value2"), store.Get([]byte("key1")))
+}
+
 //-------------------------------------------------------------------------------------------
 // do some random ops
 
@@ -465,7 +478,7 @@ func randInt(n int) int {
 	return unsafe.NewRand().Int() % n
 }
 
-// useful for replaying an error case if we find one
+// useful for replaying a error case if we find one
 func doOp(t *testing.T, st types.CacheKVStore, truth dbm.DB, op int, args ...int) {
 	t.Helper()
 	switch op {
@@ -475,7 +488,6 @@ func doOp(t *testing.T, st types.CacheKVStore, truth dbm.DB, op int, args ...int
 		err := truth.Set(keyFmt(k), valFmt(k))
 		require.NoError(t, err)
 	case opSetRange:
-		require.True(t, len(args) > 1)
 		start := args[0]
 		end := args[1]
 		setRange(t, st, truth, start, end)
@@ -485,7 +497,6 @@ func doOp(t *testing.T, st types.CacheKVStore, truth dbm.DB, op int, args ...int
 		err := truth.Delete(keyFmt(k))
 		require.NoError(t, err)
 	case opDelRange:
-		require.True(t, len(args) > 1)
 		start := args[0]
 		end := args[1]
 		deleteRange(t, st, truth, start, end)
@@ -546,6 +557,7 @@ func assertIterateDomainCheck(t *testing.T, st types.KVStore, mem dbm.DB, r []ke
 	require.NoError(t, err)
 
 	krc := newKeyRangeCounter(r)
+	i := 0
 
 	for ; krc.valid(); krc.next() {
 		require.True(t, itr.Valid())
@@ -562,6 +574,7 @@ func assertIterateDomainCheck(t *testing.T, st types.KVStore, mem dbm.DB, r []ke
 
 		itr.Next()
 		itr2.Next()
+		i++
 	}
 
 	require.False(t, itr.Valid())
@@ -675,10 +688,8 @@ func BenchmarkCacheKVStoreGetNoKeyFound(b *testing.B) {
 	st := newCacheKVStore()
 	b.ResetTimer()
 	// assumes b.N < 2**24
-	idx := 0
-	for b.Loop() {
-		st.Get([]byte{byte((idx & 0xFF0000) >> 16), byte((idx & 0xFF00) >> 8), byte(idx & 0xFF)})
-		idx++
+	for i := 0; i < b.N; i++ {
+		st.Get([]byte{byte((i & 0xFF0000) >> 16), byte((i & 0xFF00) >> 8), byte(i & 0xFF)})
 	}
 }
 
@@ -691,9 +702,7 @@ func BenchmarkCacheKVStoreGetKeyFound(b *testing.B) {
 	}
 	b.ResetTimer()
 	// assumes b.N < 2**24
-	idx := 0
-	for b.Loop() {
-		st.Get([]byte{byte((idx & 0xFF0000) >> 16), byte((idx & 0xFF00) >> 8), byte(idx & 0xFF)})
-		idx++
+	for i := 0; i < b.N; i++ {
+		st.Get([]byte{byte((i & 0xFF0000) >> 16), byte((i & 0xFF00) >> 8), byte(i & 0xFF)})
 	}
 }

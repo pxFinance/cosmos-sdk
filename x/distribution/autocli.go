@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
-	distributionv1beta1 "cosmossdk.io/api/cosmos/distribution/v1beta1"
+	distirbuitonv1beta1 "cosmossdk.io/api/cosmos/distribution/v1beta1"
 
 	"github.com/cosmos/cosmos-sdk/version"
 )
@@ -13,7 +13,7 @@ import (
 func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 	return &autocliv1.ModuleOptions{
 		Query: &autocliv1.ServiceCommandDescriptor{
-			Service: distributionv1beta1.Query_ServiceDesc.ServiceName,
+			Service: distirbuitonv1beta1.Query_ServiceDesc.ServiceName,
 			RpcCommandOptions: []*autocliv1.RpcCommandOptions{
 				{
 					RpcMethod: "Params",
@@ -85,39 +85,10 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					Short:     "Query the amount of coins in the community pool",
 					Example:   fmt.Sprintf(`$ %s query distribution community-pool`, version.AppName),
 				},
-				{
-					RpcMethod: "ValidatorHistoricalRewards",
-					Use:       "validator-historical-rewards [validator] [period]",
-					Short:     "Query validator historical rewards for a specific period",
-					Example:   fmt.Sprintf(`$ %s query distribution validator-historical-rewards [validator-address] 5`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
-						{ProtoField: "validator_address"},
-						{ProtoField: "period"},
-					},
-				},
-				{
-					RpcMethod: "ValidatorCurrentRewards",
-					Use:       "validator-current-rewards [validator]",
-					Short:     "Query validator current rewards",
-					Example:   fmt.Sprintf(`$ %s query distribution validator-current-rewards [validator-address]`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
-						{ProtoField: "validator_address"},
-					},
-				},
-				{
-					RpcMethod: "DelegatorStartingInfo",
-					Use:       "delegator-starting-info [delegator-address] [validator-address]",
-					Short:     "Query delegator starting info for a delegation",
-					Example:   fmt.Sprintf(`$ %s query distribution delegator-starting-info [delegator-address] [validator-address]`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
-						{ProtoField: "delegator_address"},
-						{ProtoField: "validator_address"},
-					},
-				},
 			},
 		},
 		Tx: &autocliv1.ServiceCommandDescriptor{
-			Service: distributionv1beta1.Msg_ServiceDesc.ServiceName,
+			Service: distirbuitonv1beta1.Msg_ServiceDesc.ServiceName,
 			RpcCommandOptions: []*autocliv1.RpcCommandOptions{
 				{
 					RpcMethod: "SetWithdrawAddress",
@@ -164,26 +135,15 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					},
 				},
 				{
-					RpcMethod:      "UpdateParams",
-					Use:            "update-params-proposal [params]",
-					Short:          "Submit a proposal to update distribution module params. Note: the entire params must be provided.",
-					Example:        fmt.Sprintf(`%s tx distribution update-params-proposal '{ "community_tax": "20000", "base_proposer_reward": "0", "bonus_proposer_reward": "0", "withdraw_addr_enabled": true }'`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "params"}},
-					GovProposal:    true,
+					RpcMethod: "UpdateParams",
+					Skip:      true, // skipped because authority gated
 				},
 				{
 					RpcMethod: "CommunityPoolSpend",
-					Use:       "community-pool-spend-proposal [recipient] [amount]",
-					Example:   fmt.Sprintf(`$ %s tx distribution community-pool-spend-proposal [recipient] 100uatom`, version.AppName),
-					Short:     "Submit a proposal to spend from the community pool",
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
-						{ProtoField: "recipient"},
-						{ProtoField: "amount", Varargs: true},
-					},
-					GovProposal: true,
+					Skip:      true, // skipped because authority gated
 				},
 			},
-			EnhanceCustomCommand: true,
+			EnhanceCustomCommand: false, // use custom commands only until v0.51
 		},
 	}
 }

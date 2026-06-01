@@ -6,7 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// NewValidatorHistoricalRewards creates a new ValidatorHistoricalRewards
+// create a new ValidatorHistoricalRewards
 func NewValidatorHistoricalRewards(cumulativeRewardRatio sdk.DecCoins, referenceCount uint32) ValidatorHistoricalRewards {
 	return ValidatorHistoricalRewards{
 		CumulativeRewardRatio: cumulativeRewardRatio,
@@ -14,7 +14,7 @@ func NewValidatorHistoricalRewards(cumulativeRewardRatio sdk.DecCoins, reference
 	}
 }
 
-// NewValidatorCurrentRewards creates a new ValidatorCurrentRewards
+// create a new ValidatorCurrentRewards
 func NewValidatorCurrentRewards(rewards sdk.DecCoins, period uint64) ValidatorCurrentRewards {
 	return ValidatorCurrentRewards{
 		Rewards: rewards,
@@ -22,12 +22,12 @@ func NewValidatorCurrentRewards(rewards sdk.DecCoins, period uint64) ValidatorCu
 	}
 }
 
-// InitialValidatorAccumulatedCommission returns the initial accumulated commission (zero)
+// return the initial accumulated commission (zero)
 func InitialValidatorAccumulatedCommission() ValidatorAccumulatedCommission {
 	return ValidatorAccumulatedCommission{}
 }
 
-// NewValidatorSlashEvent creates a new ValidatorSlashEvent
+// create a new ValidatorSlashEvent
 func NewValidatorSlashEvent(validatorPeriod uint64, fraction sdkmath.LegacyDec) ValidatorSlashEvent {
 	return ValidatorSlashEvent{
 		ValidatorPeriod: validatorPeriod,

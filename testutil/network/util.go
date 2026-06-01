@@ -14,12 +14,10 @@ import (
 	pvm "github.com/cometbft/cometbft/privval"
 	"github.com/cometbft/cometbft/proxy"
 	"github.com/cometbft/cometbft/rpc/client/local"
-	cmttypes "github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/server/api"
@@ -48,25 +46,39 @@ func startInProcess(cfg Config, val *Validator) error {
 	app := cfg.AppConstructor(*val)
 	val.app = app
 
-	appGenesisProvider := func() (*cmttypes.GenesisDoc, error) {
+	appGenesisProvider := func() (node.ChecksummedGenesisDoc, error) {
 		appGenesis, err := genutiltypes.AppGenesisFromFile(cmtCfg.GenesisFile())
 		if err != nil {
-			return nil, err
+			return node.ChecksummedGenesisDoc{
+				Sha256Checksum: []byte{},
+			}, err
 		}
 
-		return appGenesis.ToGenesisDoc()
+		gen, err := appGenesis.ToGenesisDoc()
+		if err != nil {
+			return node.ChecksummedGenesisDoc{
+				Sha256Checksum: []byte{},
+			}, err
+		}
+		return node.ChecksummedGenesisDoc{GenesisDoc: gen, Sha256Checksum: make([]byte, 0)}, nil
+	}
+
+	pv, err := pvm.LoadOrGenFilePV(cmtCfg.PrivValidatorKeyFile(), cmtCfg.PrivValidatorStateFile(), nil)
+	if err != nil {
+		return err
 	}
 
 	cmtApp := server.NewCometABCIWrapper(app)
 	tmNode, err := node.NewNode( //resleak:notresource
+		context.TODO(),
 		cmtCfg,
-		pvm.LoadOrGenFilePV(cmtCfg.PrivValidatorKeyFile(), cmtCfg.PrivValidatorStateFile()),
-		nodeKey,
+		pv, nodeKey,
 		proxy.NewLocalClientCreator(cmtApp),
 		appGenesisProvider,
 		cmtcfg.DefaultDBProvider,
 		node.DefaultMetricsProvider(cmtCfg.Instrumentation),
 		servercmtlog.CometLoggerWrapper{Logger: logger.With("module", val.Moniker)},
+		nil,
 	)
 	if err != nil {
 		return err
@@ -98,9 +110,7 @@ func startInProcess(cfg Config, val *Validator) error {
 	grpcCfg := val.AppConfig.GRPC
 
 	if grpcCfg.Enable {
-		grpcLogger := logger.With(log.ModuleKey, "grpc-server")
-		var grpcSrv *grpc.Server
-		grpcSrv, val.ClientCtx, err = servergrpc.NewGRPCServerAndContext(val.ClientCtx, app, grpcCfg, grpcLogger)
+		grpcSrv, err := servergrpc.NewGRPCServer(val.ClientCtx, app, grpcCfg)
 		if err != nil {
 			return err
 		}
@@ -108,7 +118,7 @@ func startInProcess(cfg Config, val *Validator) error {
 		// Start the gRPC server in a goroutine. Note, the provided ctx will ensure
 		// that the server is gracefully shut down.
 		val.errGroup.Go(func() error {
-			return servergrpc.StartGRPCServer(ctx, grpcLogger, grpcCfg, grpcSrv)
+			return servergrpc.StartGRPCServer(ctx, logger.With(log.ModuleKey, "grpc-server"), grpcCfg, grpcSrv)
 		})
 
 		val.grpc = grpcSrv
@@ -131,7 +141,7 @@ func startInProcess(cfg Config, val *Validator) error {
 func collectGenFiles(cfg Config, vals []*Validator, outputDir string) error {
 	genTime := cmttime.Now()
 
-	for i := range cfg.NumValidators {
+	for i := 0; i < cfg.NumValidators; i++ {
 		cmtCfg := vals[i].Ctx.Config
 
 		nodeDir := filepath.Join(outputDir, vals[i].Moniker, "simd")
@@ -154,18 +164,8 @@ func collectGenFiles(cfg Config, vals []*Validator, outputDir string) error {
 			return err
 		}
 
-		// overwrite each validator's genesis file to have a canonical genesis
-		// time, preserving any custom ConsensusParams (e.g. the
-		// Validator.PubKeyTypes the network was bootstrapped with).
-		// genutil.ExportGenesisFileWithTime is unsuitable here because it
-		// builds a fresh AppGenesis whose ConsensusParams default back to
-		// `[ed25519]`, wiping ml_dsa_65 or any other opt-in key type.
-		appGenesis.GenesisTime = genTime
-		appGenesis.AppState = appState
-		if appGenesis.Consensus != nil {
-			appGenesis.Consensus.Validators = nil
-		}
-		if err := genutil.ExportGenesisFile(appGenesis, genFile); err != nil {
+		// overwrite each validator's genesis file to have a canonical genesis time
+		if err := genutil.ExportGenesisFileWithTime(genFile, cfg.ChainID, nil, appState, genTime); err != nil {
 			return err
 		}
 	}
@@ -198,26 +198,16 @@ func initGenFiles(cfg Config, genAccounts []authtypes.GenesisAccount, genBalance
 		return err
 	}
 
-	consensus := &genutiltypes.ConsensusGenesis{
-		Validators: nil,
-	}
-	// When the caller pins validators to a non-default consensus key type
-	// (e.g. ml_dsa_65), pre-populate ConsensusParams so the staking module
-	// won't reject MsgCreateValidator at InitChain with
-	// "validator pubkey type is not supported".
-	if cfg.ValidatorConsensusKeyType != "" {
-		params := cmttypes.DefaultConsensusParams()
-		params.Validator.PubKeyTypes = []string{cfg.ValidatorConsensusKeyType}
-		consensus.Params = params
-	}
 	appGenesis := genutiltypes.AppGenesis{
-		ChainID:   cfg.ChainID,
-		AppState:  appGenStateJSON,
-		Consensus: consensus,
+		ChainID:  cfg.ChainID,
+		AppState: appGenStateJSON,
+		Consensus: &genutiltypes.ConsensusGenesis{
+			Validators: nil,
+		},
 	}
 
 	// generate empty genesis files for each validator and save
-	for i := range cfg.NumValidators {
+	for i := 0; i < cfg.NumValidators; i++ {
 		if err := appGenesis.SaveAs(genFiles[i]); err != nil {
 			return err
 		}
@@ -240,7 +230,7 @@ func writeFile(name, dir string, contents []byte) error {
 	return nil
 }
 
-// FreeTCPAddr gets a free address for a test CometBFT server
+// Get a free address for a test CometBFT server
 // protocol is either tcp, http, etc
 func FreeTCPAddr() (addr, port string, closeFn func() error, err error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -255,5 +245,5 @@ func FreeTCPAddr() (addr, port string, closeFn func() error, err error) {
 	portI := l.Addr().(*net.TCPAddr).Port
 	port = fmt.Sprintf("%d", portI)
 	addr = fmt.Sprintf("tcp://0.0.0.0:%s", port)
-	return addr, port, closeFn, err
+	return
 }

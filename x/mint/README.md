@@ -4,8 +4,6 @@ sidebar_position: 1
 
 # `x/mint`
 
-The `x/mint` module handles the regular minting of new tokens in a configurable manner.
-
 ## Contents
 
 * [State](#state)
@@ -27,7 +25,7 @@ The `x/mint` module handles the regular minting of new tokens in a configurable 
 
 ### The Minting Mechanism
 
-The default minting mechanism was designed to:
+The minting mechanism was designed to:
 
 * allow for a flexible inflation rate determined by market demand targeting a particular bonded-stake ratio
 * effect a balance between market liquidity and staked supply
@@ -48,80 +46,6 @@ It can be broken down in the following way:
 * If the actual percentage of bonded tokens is above the goal %-bonded the inflation rate will
    decrease until a minimum value is reached
 
-### Custom Minters
-
-As of Cosmos SDK v0.53.0, developers can set a custom `MintFn` for the module for specialized token minting logic.
-
-The function signature that a `MintFn` must implement is as follows:
-
-```go
-// MintFn defines the function that needs to be implemented in order to customize the minting process.
-type MintFn func(ctx sdk.Context, k *Keeper) error
-```
-
-This can be passed to the `Keeper` upon creation with an additional `Option`:
-
-```go
-app.MintKeeper = mintkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[minttypes.StoreKey]),
-		app.StakingKeeper,
-		app.AccountKeeper,
-		app.BankKeeper,
-		authtypes.FeeCollectorName,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		// mintkeeper.WithMintFn(CUSTOM_MINT_FN), // custom mintFn can be added here
-	)
-```
-
-#### Custom Minter DI Example
-
-Below is a simple approach to creating a custom mint function with extra dependencies in DI configurations.
-For this basic example, we will make the minter simply double the supply of `foo` coin.
-
-First, we will define a function that takes our required dependencies, and returns a `MintFn`.
-
-```go
-// MyCustomMintFunction is a custom mint function that doubles the supply of `foo` coin.
-func MyCustomMintFunction(bank bankkeeper.BaseKeeper) mintkeeper.MintFn {
-	return func(ctx sdk.Context, k *mintkeeper.Keeper) error {
-		supply := bank.GetSupply(ctx, "foo")
-		err := k.MintCoins(ctx, sdk.NewCoins(supply.Add(supply)))
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-}
-```
-
-Then, pass the function defined above into the `depinject.Supply` function with the required dependencies.
-
-```go
-// NewSimApp returns a reference to an initialized SimApp.
-func NewSimApp(
-    logger log.Logger,
-    db dbm.DB,
-    loadLatest bool,
-    appOpts servertypes.AppOptions,
-    baseAppOptions ...func(*baseapp.BaseApp),
-) *SimApp {
-    var (
-        app        = &SimApp{}
-        appBuilder *runtime.AppBuilder
-        appConfig = depinject.Configs(
-            AppConfig,
-            depinject.Supply(
-                appOpts,
-                logger,
-                // our custom mint function with the necessary dependency passed in.
-                MyCustomMintFunction(app.BankKeeper),
-            ),
-        )
-	)
-	// ...
-}
-```
 
 ## State
 
@@ -139,20 +63,16 @@ https://github.com/cosmos/cosmos-sdk/blob/v0.47.0-rc1/proto/cosmos/mint/v1beta1/
 
 The mint module stores its params in state with the prefix of `0x01`,
 it can be updated with governance or the address with authority.
-**Note:** With the latest update, the addition of the `MaxSupply` parameter allows controlling the maximum supply of tokens minted by the module. 
-A value of `0` indicates an unlimited supply.
 
 * Params: `mint/params -> legacy_amino(params)`
 
 ```protobuf reference
-https://github.com/cosmos/cosmos-sdk/blob/7068d0da52d954430054768b2c56aff44666933b/x/mint/proto/cosmos/mint/v1beta1/mint.proto#L26-L68
+https://github.com/cosmos/cosmos-sdk/blob/v0.47.0-rc1/proto/cosmos/mint/v1beta1/mint.proto#L26-L59
 ```
 
 ## Begin-Block
 
 Minting parameters are recalculated and inflation paid at the beginning of each block.
-
-The minting logic in the `BeginBlocker` function provides an optional feature for controlling token minting based on the maximum allowable supply (MaxSupply). This feature allows users to adjust the minting process according to their specific requirements and use cases. However, it's important to note that the MaxSupply parameter is independent of the minting process and assumes that any adjustments to the total supply, including burning tokens, are handled by external modules.
 
 ### Inflation rate calculation
 
@@ -163,7 +83,7 @@ inflation calculation logic is needed, this can be achieved by defining and
 passing a function that matches `InflationCalculationFn`'s signature.
 
 ```go
-type InflationCalculationFn func(ctx context.Context, minter Minter, params Params, bondedRatio math.LegacyDec) math.LegacyDec
+type InflationCalculationFn func(ctx sdk.Context, minter Minter, params Params, bondedRatio math.LegacyDec) math.LegacyDec
 ```
 
 #### NextInflationRate
@@ -216,19 +136,15 @@ BlockProvision(params Params) sdk.Coin {
 ## Parameters
 
 The minting module contains the following parameters:
-Note: `0` indicates unlimited supply for the `MaxSupply` parameter.
 
-For legacy Amino JSON compatibility, `max_supply` is encoded even when it is `"0"`.
-
-| Key                 | Type             | Example                |
-|---------------------|------------------|------------------------|
-| MintDenom           | string           | "uatom"                |
-| InflationRateChange | string (dec)     | "0.130000000000000000" |
-| InflationMax        | string (dec)     | "0.200000000000000000" |
-| InflationMin        | string (dec)     | "0.070000000000000000" |
-| GoalBonded          | string (dec)     | "0.670000000000000000" |
-| BlocksPerYear       | string (uint64)  | "6311520"              |
-| MaxSupply           | string (math.Int)| "0"                    |
+| Key                 | Type            | Example                |
+|---------------------|-----------------|------------------------|
+| MintDenom           | string          | "uatom"                |
+| InflationRateChange | string (dec)    | "0.130000000000000000" |
+| InflationMax        | string (dec)    | "0.200000000000000000" |
+| InflationMin        | string (dec)    | "0.070000000000000000" |
+| GoalBonded          | string (dec)    | "0.670000000000000000" |
+| BlocksPerYear       | string (uint64) | "6311520"              |
 
 
 ## Events
@@ -316,7 +232,6 @@ inflation_max: "0.200000000000000000"
 inflation_min: "0.070000000000000000"
 inflation_rate_change: "0.130000000000000000"
 mint_denom: stake
-max_supply: "0"
 ```
 
 ### gRPC
@@ -391,8 +306,7 @@ Example Output:
     "inflationMax": "200000000000000000",
     "inflationMin": "70000000000000000",
     "goalBonded": "670000000000000000",
-    "blocksPerYear": "6311520",
-    "maxSupply": "0",
+    "blocksPerYear": "6311520"
   }
 }
 ```
@@ -463,8 +377,7 @@ Example Output:
     "inflationMax": "200000000000000000",
     "inflationMin": "70000000000000000",
     "goalBonded": "670000000000000000",
-    "blocksPerYear": "6311520",
-    "maxSupply": "0",
+    "blocksPerYear": "6311520"
   }
 }
 ```

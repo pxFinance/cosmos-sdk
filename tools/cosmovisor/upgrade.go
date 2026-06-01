@@ -6,10 +6,9 @@ import (
 	"os"
 	"runtime"
 
-	"cosmossdk.io/log/v2"
-
-	"github.com/cosmos/cosmos-sdk/x/upgrade/plan"
-	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	"cosmossdk.io/log"
+	"cosmossdk.io/x/upgrade/plan"
+	upgradetypes "cosmossdk.io/x/upgrade/types"
 )
 
 // UpgradeBinary will be called after the log message has been parsed and the process has terminated.
@@ -40,9 +39,13 @@ func UpgradeBinary(logger log.Logger, cfg *Config, p upgradetypes.Plan) error {
 		return fmt.Errorf("unhandled error: %w", err)
 	}
 
-	upgradeInfo, err := plan.ParseInfo(p.Info, plan.ParseOptionEnforceChecksum(cfg.DownloadMustHaveChecksum))
+	upgradeInfo, err := plan.ParseInfo(p.Info)
 	if err != nil {
 		return fmt.Errorf("cannot parse upgrade info: %w", err)
+	}
+
+	if err := upgradeInfo.ValidateFull(cfg.Name); err != nil {
+		return fmt.Errorf("invalid binaries: %w", err)
 	}
 
 	url, err := GetBinaryURL(upgradeInfo.Binaries)

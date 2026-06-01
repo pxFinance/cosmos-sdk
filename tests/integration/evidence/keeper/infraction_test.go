@@ -8,19 +8,23 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/core/comet"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/evidence"
+	"cosmossdk.io/x/evidence/exported"
+	"cosmossdk.io/x/evidence/keeper"
+	evidencetypes "cosmossdk.io/x/evidence/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil/integration"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -33,11 +37,8 @@ import (
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
-	"github.com/cosmos/cosmos-sdk/x/evidence"
-	"github.com/cosmos/cosmos-sdk/x/evidence/exported"
-	"github.com/cosmos/cosmos-sdk/x/evidence/keeper"
-	evidencetypes "github.com/cosmos/cosmos-sdk/x/evidence/types"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	"github.com/cosmos/cosmos-sdk/x/slashing/testutil"
@@ -78,15 +79,23 @@ type fixture struct {
 	stakingKeeper  *stakingkeeper.Keeper
 }
 
-func initFixture(tb testing.TB) *fixture {
-	tb.Helper()
+func initFixture(t testing.TB) *fixture {
 	keys := storetypes.NewKVStoreKeys(
-		authtypes.StoreKey, banktypes.StoreKey, consensusparamtypes.StoreKey, evidencetypes.StoreKey, stakingtypes.StoreKey, slashingtypes.StoreKey,
+		authtypes.StoreKey, banktypes.StoreKey, paramtypes.StoreKey, consensusparamtypes.StoreKey, evidencetypes.StoreKey, stakingtypes.StoreKey, slashingtypes.StoreKey,
+	)
+	tkeys := storetypes.NewTransientStoreKeys(
+		banktypes.TStoreKey,
+	)
+	okeys := storetypes.NewObjectStoreKeys(
+		banktypes.ObjectStoreKey,
 	)
 	cdc := moduletestutil.MakeTestEncodingConfig(auth.AppModuleBasic{}, evidence.AppModuleBasic{}).Codec
 
-	logger := log.NewTestLogger(tb)
-	cms := integration.CreateMultiStore(keys, logger)
+	logger := log.NewTestLogger(t)
+	cms := integration.CreateMultiStore(keys, tkeys, okeys, logger)
+	if err := cms.LoadLatestVersion(); err != nil {
+		t.Fatalf("failed to load latest version: %v", err)
+	}
 
 	newCtx := sdk.NewContext(cms, cmtproto.Header{}, true, logger)
 
@@ -111,9 +120,12 @@ func initFixture(tb testing.TB) *fixture {
 	blockedAddresses := map[string]bool{
 		accountKeeper.GetAuthority(): false,
 	}
+
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		cdc,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		runtime.NewTransientKVStoreService(tkeys[banktypes.TStoreKey]),
+		okeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		blockedAddresses,
 		authority.String(),
@@ -129,10 +141,10 @@ func initFixture(tb testing.TB) *fixture {
 	router = router.AddRoute(evidencetypes.RouteEquivocation, testEquivocationHandler(evidenceKeeper))
 	evidenceKeeper.SetRouter(router)
 
-	authModule := auth.NewAppModule(cdc, accountKeeper, authsims.RandomGenesisAccounts)
-	bankModule := bank.NewAppModule(cdc, bankKeeper, accountKeeper)
-	stakingModule := staking.NewAppModule(cdc, stakingKeeper, accountKeeper, bankKeeper)
-	slashingModule := slashing.NewAppModule(cdc, slashingKeeper, accountKeeper, bankKeeper, stakingKeeper, cdc.InterfaceRegistry())
+	authModule := auth.NewAppModule(cdc, accountKeeper, authsims.RandomGenesisAccounts, nil)
+	bankModule := bank.NewAppModule(cdc, bankKeeper, accountKeeper, nil)
+	stakingModule := staking.NewAppModule(cdc, stakingKeeper, accountKeeper, bankKeeper, nil)
+	slashingModule := slashing.NewAppModule(cdc, slashingKeeper, accountKeeper, bankKeeper, stakingKeeper, nil, cdc.InterfaceRegistry())
 	evidenceModule := evidence.NewAppModule(*evidenceKeeper)
 
 	integrationApp := integration.NewIntegrationApp(newCtx, logger, keys, cdc, map[string]appmodule.AppModule{
@@ -149,10 +161,10 @@ func initFixture(tb testing.TB) *fixture {
 	evidencetypes.RegisterMsgServer(integrationApp.MsgServiceRouter(), keeper.NewMsgServerImpl(*evidenceKeeper))
 	evidencetypes.RegisterQueryServer(integrationApp.QueryHelper(), keeper.NewQuerier(evidenceKeeper))
 
-	assert.NilError(tb, slashingKeeper.SetParams(sdkCtx, testutil.TestParams()))
+	assert.NilError(t, slashingKeeper.SetParams(sdkCtx, testutil.TestParams()))
 
 	// set default staking params
-	assert.NilError(tb, stakingKeeper.SetParams(sdkCtx, stakingtypes.DefaultParams()))
+	assert.NilError(t, stakingKeeper.SetParams(sdkCtx, stakingtypes.DefaultParams()))
 
 	return &fixture{
 		app:            integrationApp,
@@ -189,25 +201,25 @@ func TestHandleDoubleSign(t *testing.T) {
 	)
 	val, err := f.stakingKeeper.Validator(ctx, operatorAddr)
 	assert.NilError(t, err)
-	assert.DeepEqual(t, selfDelegation, val.GetValidatorPower())
+	assert.DeepEqual(t, selfDelegation, val.GetBondedTokens())
 
 	assert.NilError(t, f.slashingKeeper.AddPubkey(f.sdkCtx, valpubkey))
 
 	info := slashingtypes.NewValidatorSigningInfo(sdk.ConsAddress(valpubkey.Address()), f.sdkCtx.BlockHeight(), int64(0), time.Unix(0, 0), false, int64(0))
-	assert.NilError(t, f.slashingKeeper.SetValidatorSigningInfo(f.sdkCtx, sdk.ConsAddress(valpubkey.Address()), info))
+	f.slashingKeeper.SetValidatorSigningInfo(f.sdkCtx, sdk.ConsAddress(valpubkey.Address()), info)
 
 	// handle a signature to set signing info
-	assert.NilError(t, f.slashingKeeper.HandleValidatorSignature(ctx, valpubkey.Address(), selfDelegation.Int64(), comet.BlockIDFlagCommit))
+	f.slashingKeeper.HandleValidatorSignature(ctx, valpubkey.Address(), selfDelegation.Int64(), comet.BlockIDFlagCommit)
 
 	// double sign less than max age
 	val, err = f.stakingKeeper.Validator(ctx, operatorAddr)
 	assert.NilError(t, err)
 	oldTokens := val.GetTokens()
 
-	nci := NewCometInfo(abci.RequestFinalizeBlock{
+	nci := NewCometInfo(abci.FinalizeBlockRequest{
 		Misbehavior: []abci.Misbehavior{{
 			Validator: abci.Validator{Address: valpubkey.Address(), Power: power},
-			Type:      abci.MisbehaviorType_DUPLICATE_VOTE,
+			Type:      abci.MISBEHAVIOR_TYPE_DUPLICATE_VOTE,
 			Time:      time.Now().UTC(),
 			Height:    1,
 		}},
@@ -282,19 +294,19 @@ func TestHandleDoubleSign_TooOld(t *testing.T) {
 	)
 	val, err := f.stakingKeeper.Validator(ctx, operatorAddr)
 	assert.NilError(t, err)
-	assert.DeepEqual(t, amt, val.GetValidatorPower())
+	assert.DeepEqual(t, amt, val.GetBondedTokens())
 
-	nci := NewCometInfo(abci.RequestFinalizeBlock{
+	nci := NewCometInfo(abci.FinalizeBlockRequest{
 		Misbehavior: []abci.Misbehavior{{
 			Validator: abci.Validator{Address: valpubkey.Address(), Power: power},
-			Type:      abci.MisbehaviorType_DUPLICATE_VOTE,
+			Type:      abci.MISBEHAVIOR_TYPE_DUPLICATE_VOTE,
 			Time:      ctx.BlockTime(),
 			Height:    0,
 		}},
 	})
 
-	assert.NilError(t, f.app.StoreConsensusParams(ctx, *simtestutil.DefaultConsensusParams))
-	cp := f.app.GetConsensusParams(ctx)
+	assert.NilError(t, f.app.BaseApp.StoreConsensusParams(ctx, *simtestutil.DefaultConsensusParams))
+	cp := f.app.BaseApp.GetConsensusParams(ctx)
 
 	ctx = ctx.WithCometInfo(nci)
 	ctx = ctx.WithConsensusParams(cp)
@@ -353,7 +365,7 @@ type CometService struct {
 	Evidence []abci.Misbehavior
 }
 
-func NewCometInfo(bg abci.RequestFinalizeBlock) comet.BlockInfo {
+func NewCometInfo(bg abci.FinalizeBlockRequest) comet.BlockInfo {
 	return CometService{
 		Evidence: bg.Misbehavior,
 	}

@@ -16,7 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/bech32/legacybech32" //nolint:staticcheck // retain for debug purposes
+	legacybech32 "github.com/cosmos/cosmos-sdk/types/bech32/legacybech32" //nolint:staticcheck // we do old keys, they're keys after all.
 	"github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/version"
 )
@@ -75,7 +75,7 @@ func getCodecInterfaces() *cobra.Command {
 	}
 }
 
-// getCodecInterfaceImpls creates and returns a new cmd used for listing all registered implementations of a given interface on the application codec.
+// getCodecInterfaceImpls creates and returns a new cmd used for listing all registered implemenations of a given interface on the application codec.
 func getCodecInterfaceImpls() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list-implementations [interface]",
@@ -104,7 +104,7 @@ func PubkeyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pubkey [pubkey]",
 		Short: "Decode a pubkey from proto JSON",
-		Long: fmt.Sprintf(`Decode a pubkey from proto JSON and display its address.
+		Long: fmt.Sprintf(`Decode a pubkey from proto JSON and display it's address.
 
 Example:
 $ %s debug pubkey '{"@type":"/cosmos.crypto.secp256k1.PubKey","key":"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ"}'
@@ -157,17 +157,17 @@ func getPubKeyFromRawString(pkstr, keytype string) (cryptotypes.PubKey, error) {
 		}
 	}
 
-	pk, err := legacybech32.UnmarshalPubKey(legacybech32.AccPK, pkstr)
+	pk, err := legacybech32.UnmarshalPubKey(legacybech32.AccPK, pkstr) //nolint:staticcheck // we do old keys, they're keys after all.
 	if err == nil {
 		return pk, nil
 	}
 
-	pk, err = legacybech32.UnmarshalPubKey(legacybech32.ValPK, pkstr)
+	pk, err = legacybech32.UnmarshalPubKey(legacybech32.ValPK, pkstr) //nolint:staticcheck // we do old keys, they're keys after all.
 	if err == nil {
 		return pk, nil
 	}
 
-	pk, err = legacybech32.UnmarshalPubKey(legacybech32.ConsPK, pkstr)
+	pk, err = legacybech32.UnmarshalPubKey(legacybech32.ConsPK, pkstr) //nolint:staticcheck // we do old keys, they're keys after all.
 	if err == nil {
 		return pk, nil
 	}
@@ -178,7 +178,7 @@ func getPubKeyFromRawString(pkstr, keytype string) (cryptotypes.PubKey, error) {
 func PubkeyRawCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pubkey-raw [pubkey] -t [{ed25519, secp256k1}]",
-		Short: "Decode an ED25519 or secp256k1 pubkey from hex, base64, or bech32",
+		Short: "Decode a ED25519 or secp256k1 pubkey from hex, base64, or bech32",
 		Long:  "Decode a pubkey from hex, base64, or bech32.",
 		Example: fmt.Sprintf(`
 %s debug pubkey-raw 8FCA9D6D1F80947FD5E9A05309259746F5F72541121766D5F921339DD061174A
@@ -206,7 +206,7 @@ func PubkeyRawCmd() *cobra.Command {
 			var consensusPub string
 			edPK, ok := pk.(*ed25519.PubKey)
 			if ok && pubkeyType == ed {
-				consensusPub, err = legacybech32.MarshalPubKey(legacybech32.ConsPK, edPK)
+				consensusPub, err = legacybech32.MarshalPubKey(legacybech32.ConsPK, edPK) //nolint:staticcheck // we do old keys, they're keys after all.
 				if err != nil {
 					return err
 				}
@@ -219,11 +219,11 @@ func PubkeyRawCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			accPub, err := legacybech32.MarshalPubKey(legacybech32.AccPK, pk)
+			accPub, err := legacybech32.MarshalPubKey(legacybech32.AccPK, pk) //nolint:staticcheck // we do old keys, they're keys after all.
 			if err != nil {
 				return err
 			}
-			valPub, err := legacybech32.MarshalPubKey(legacybech32.ValPK, pk)
+			valPub, err := legacybech32.MarshalPubKey(legacybech32.ValPK, pk) //nolint:staticcheck // we do old keys, they're keys after all.
 			if err != nil {
 				return err
 			}

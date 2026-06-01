@@ -6,11 +6,8 @@ import (
 	cmtcrypto "github.com/cometbft/cometbft/crypto"
 	"github.com/cosmos/gogoproto/proto"
 
-	errorsmod "cosmossdk.io/errors"
-
 	ecdsa "github.com/cosmos/cosmos-sdk/crypto/keys/internal/ecdsa"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	"github.com/cosmos/cosmos-sdk/types/errors"
 )
 
 // customProtobufType is here to make sure that ecdsaPK and ecdsaSK implement the
@@ -70,12 +67,12 @@ type ecdsaPK struct {
 
 // Marshal implements customProtobufType.
 func (pk ecdsaPK) Marshal() ([]byte, error) {
-	return pk.Bytes(), nil
+	return pk.PubKey.Bytes(), nil
 }
 
 // MarshalJSON implements customProtobufType.
 func (pk ecdsaPK) MarshalJSON() ([]byte, error) {
-	b64 := base64.StdEncoding.EncodeToString(pk.Bytes())
+	b64 := base64.StdEncoding.EncodeToString(pk.PubKey.Bytes())
 	return []byte("\"" + b64 + "\""), nil
 }
 
@@ -101,19 +98,4 @@ func (pk *ecdsaPK) Size() int {
 // Unmarshal implements proto.Marshaler interface
 func (pk *ecdsaPK) Unmarshal(bz []byte) error {
 	return pk.PubKey.Unmarshal(bz, secp256r1, pubKeySize)
-}
-
-// NewPubKeyFromBytes creates a secp256r1 PubKey from bytes.
-func NewPubKeyFromBytes(bytes []byte) (*PubKey, error) {
-	if len(bytes) != pubKeySize {
-		return nil, errorsmod.Wrapf(errors.ErrInvalidPubKey,
-			"wrong secp256r1 pubkey size, expecting %d bytes, got %d",
-			pubKeySize, len(bytes))
-	}
-	pk := &ecdsaPK{}
-	err := pk.Unmarshal(bytes)
-	if err != nil {
-		return nil, errorsmod.Wrap(errors.ErrInvalidPubKey, err.Error())
-	}
-	return &PubKey{Key: pk}, nil
 }

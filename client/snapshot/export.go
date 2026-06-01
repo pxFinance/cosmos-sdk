@@ -3,7 +3,7 @@ package snapshot
 import (
 	"github.com/spf13/cobra"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
@@ -29,7 +29,7 @@ func ExportSnapshotCmd(appCreator servertypes.AppCreator) *cobra.Command {
 				return err
 			}
 			logger := log.NewLogger(cmd.OutOrStdout())
-			app := appCreator(logger, db, ctx.Viper)
+			app := appCreator(logger, db, nil, ctx.Viper)
 
 			if height == 0 {
 				height = app.CommitMultiStore().LastCommitID().Version

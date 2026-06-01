@@ -2,7 +2,7 @@ package feegrant
 
 import "cosmossdk.io/errors"
 
-// Codes for feegrant errors
+// Codes for governance errors
 const (
 	DefaultCodespace = ModuleName
 )

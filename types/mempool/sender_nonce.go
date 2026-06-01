@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand" // #nosec // math/rand is used for random selection and seeded from crypto/rand
-	"slices"
 	"sync"
 
 	"github.com/huandu/skiplist"
@@ -138,10 +137,7 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 
 	sig := sigs[0]
 	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
-	}
+	nonce := sig.Sequence
 
 	senderTxs, found := snm.senders[sender]
 	if !found {
@@ -157,8 +153,8 @@ func (snm *SenderNonceMempool) Insert(_ context.Context, tx sdk.Tx) error {
 	return nil
 }
 
-// Select returns an iterator ordering transactions in the mempool with the lowest
-// nonce of a randomly selected sender first.
+// Select returns an iterator ordering transactions the mempool with the lowest
+// nonce of a random selected sender first.
 //
 // NOTE: It is not safe to use this iterator while removing transactions from
 // the underlying mempool.
@@ -229,10 +225,7 @@ func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
 
 	sig := sigs[0]
 	sender := sdk.AccAddress(sig.PubKey.Address()).String()
-	nonce, err := ChooseNonce(sig.Sequence, tx)
-	if err != nil {
-		return err
-	}
+	nonce := sig.Sequence
 
 	senderTxs, found := snm.senders[sender]
 	if !found {
@@ -252,11 +245,6 @@ func (snm *SenderNonceMempool) Remove(tx sdk.Tx) error {
 	delete(snm.existingTx, key)
 
 	return nil
-}
-
-// RemoveWithReason is a proxy to Remove for this mempool.
-func (snm *SenderNonceMempool) RemoveWithReason(_ context.Context, tx sdk.Tx, _ RemoveReason) error {
-	return snm.Remove(tx)
 }
 
 type senderNonceMempoolIterator struct {
@@ -300,5 +288,5 @@ func (i *senderNonceMempoolIterator) Tx() sdk.Tx {
 }
 
 func removeAtIndex[T any](slice []T, index int) []T {
-	return slices.Delete(slice, index, index+1)
+	return append(slice[:index], slice[index+1:]...)
 }

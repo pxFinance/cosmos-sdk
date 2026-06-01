@@ -146,6 +146,7 @@ func TestGenesisStateValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(tt *testing.T) {
 			err := tc.genesisState.Validate()
 
@@ -174,7 +175,7 @@ func TestMigrateSendEnabled(t *testing.T) {
 				}},
 				Supply: sdk.Coins{sdk.NewCoin("supplycoin", math.NewInt(800))},
 				DenomMetadata: []Metadata{{
-					Description: "metadesc",
+					Description: "metadesk",
 					DenomUnits:  nil,
 					Base:        "meta",
 					Display:     "meta",
@@ -192,7 +193,7 @@ func TestMigrateSendEnabled(t *testing.T) {
 				}},
 				Supply: sdk.Coins{sdk.NewCoin("supplycoin", math.NewInt(800))},
 				DenomMetadata: []Metadata{{
-					Description: "metadesc",
+					Description: "metadesk",
 					DenomUnits:  nil,
 					Base:        "meta",
 					Display:     "meta",

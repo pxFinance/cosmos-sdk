@@ -3,11 +3,12 @@ package ante_test
 import (
 	"testing"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/require"
 
+	storetypes "cosmossdk.io/store/types"
+
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -117,7 +118,7 @@ func TestRecoverPanic(t *testing.T) {
 	require.Equal(t, gasLimit, newCtx.GasMeter().Limit())
 
 	antehandler = sdk.ChainAnteDecorators(sud, PanicDecorator{})
-	require.Panics(t, func() { _, _ = antehandler(suite.ctx, tx, false) }, "Recovered from non-Out-of-Gas panic")
+	require.Panics(t, func() { antehandler(suite.ctx, tx, false) }, "Recovered from non-Out-of-Gas panic")
 }
 
 type OutOfGasDecorator struct{}

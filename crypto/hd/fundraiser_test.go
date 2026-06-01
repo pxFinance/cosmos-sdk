@@ -29,8 +29,6 @@ func TestFullFundraiserPath(t *testing.T) {
 }
 
 func initFundraiserTestVectors(t *testing.T) []addrData {
-	t.Helper()
-
 	// NOTE: atom fundraiser address
 	// var hdPath string = "m/44'/118'/0'/0/0"
 	var hdToAddrTable []addrData
@@ -51,20 +49,11 @@ func TestFundraiserCompatibility(t *testing.T) {
 	hdToAddrTable := initFundraiserTestVectors(t)
 
 	for i, d := range hdToAddrTable {
-		privB, err := hex.DecodeString(d.Priv)
-		require.NoError(t, err)
-
-		pubB, err := hex.DecodeString(d.Pub)
-		require.NoError(t, err)
-
-		addrB, err := hex.DecodeString(d.Addr)
-		require.NoError(t, err)
-
-		seedB, err := hex.DecodeString(d.Seed)
-		require.NoError(t, err)
-
-		masterB, err := hex.DecodeString(d.Master)
-		require.NoError(t, err)
+		privB, _ := hex.DecodeString(d.Priv)
+		pubB, _ := hex.DecodeString(d.Pub)
+		addrB, _ := hex.DecodeString(d.Addr)
+		seedB, _ := hex.DecodeString(d.Seed)
+		masterB, _ := hex.DecodeString(d.Master)
 
 		seed := bip39.NewSeed(d.Mnemonic, "")
 

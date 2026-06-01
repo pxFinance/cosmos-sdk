@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	protoio "github.com/cosmos/gogoproto/io"
 	"github.com/cosmos/gogoproto/proto"
 	"gotest.tools/v3/assert"
@@ -72,7 +72,7 @@ func TestValidateVoteExtensions(t *testing.T) {
 			ChainId:   chainID,
 		}
 
-		extSignBytes, err := marshalVoteExt(&cve)
+		extSignBytes, err := mashalVoteExt(&cve)
 		assert.NilError(t, err)
 
 		sig, err := privKeys[i].Sign(extSignBytes)
@@ -99,7 +99,7 @@ func TestValidateVoteExtensions(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func marshalVoteExt(msg proto.Message) ([]byte, error) {
+func mashalVoteExt(msg proto.Message) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := protoio.NewDelimitedWriter(&buf).WriteMsg(msg); err != nil {
 		return nil, err

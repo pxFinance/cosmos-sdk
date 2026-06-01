@@ -11,8 +11,6 @@ import (
 	tmed25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cometbft/cometbft/privval"
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/cosmos-sdk/x/genutil/types"
 )
 
 func TestExportGenesisFileWithTime(t *testing.T) {
@@ -20,8 +18,7 @@ func TestExportGenesisFileWithTime(t *testing.T) {
 
 	fname := filepath.Join(t.TempDir(), "genesis.json")
 
-	appGenesis := types.NewAppGenesisWithVersion("test", json.RawMessage(`{"account_owner": "Bob"}`))
-	require.NoError(t, ExportGenesisFileWithTime(fname, appGenesis, time.Now()))
+	require.NoError(t, ExportGenesisFileWithTime(fname, "test", nil, json.RawMessage(`{"account_owner": "Bob"}`), time.Now()))
 }
 
 func TestInitializeNodeValidatorFilesFromMnemonic(t *testing.T) {
@@ -54,6 +51,7 @@ func TestInitializeNodeValidatorFilesFromMnemonic(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := InitializeNodeValidatorFilesFromMnemonic(cfg, tt.mnemonic)
 

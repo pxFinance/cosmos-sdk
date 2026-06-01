@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -26,7 +26,7 @@ func BenchmarkAccountMapperGetAccountFound(b *testing.B) {
 	)
 	require.NoError(b, err)
 
-	ctx := app.NewContext(false)
+	ctx := app.BaseApp.NewContext(false)
 
 	// assumes b.N < 2**24
 	for i := 0; i < b.N; i++ {
@@ -53,10 +53,12 @@ func BenchmarkAccountMapperSetAccount(b *testing.B) {
 		), &accountKeeper)
 	require.NoError(b, err)
 
-	ctx := app.NewContext(false)
+	ctx := app.BaseApp.NewContext(false)
+
+	b.ResetTimer()
 
 	// assumes b.N < 2**24
-	for i := 0; b.Loop(); i++ {
+	for i := 0; i < b.N; i++ {
 		arr := []byte{byte((i & 0xFF0000) >> 16), byte((i & 0xFF00) >> 8), byte(i & 0xFF)}
 		addr := sdk.AccAddress(arr)
 		acc := accountKeeper.NewAccountWithAddress(ctx, addr)

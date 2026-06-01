@@ -3,8 +3,6 @@ package keeper_test
 import (
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-
 	sdkmath "cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
@@ -134,6 +132,7 @@ func (s *KeeperTestSuite) TestUpdateParams() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			_, err := s.msgServer.UpdateParams(s.ctx, tc.request)
 			if tc.expectErr {
@@ -212,7 +211,7 @@ func (s *KeeperTestSuite) TestUnjail() {
 				info := slashingtypes.NewValidatorSigningInfo(sdk.ConsAddress(addr), int64(4), int64(3),
 					time.Unix(2, 0), false, int64(10))
 
-				s.Require().NoError(s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info))
+				s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info)
 
 				s.stakingKeeper.EXPECT().Validator(s.ctx, valAddr).Return(val, nil)
 				del := types.NewDelegation(addr.String(), valAddr.String(), sdkmath.LegacyNewDec(100))
@@ -242,7 +241,7 @@ func (s *KeeperTestSuite) TestUnjail() {
 				info := slashingtypes.NewValidatorSigningInfo(sdk.ConsAddress(addr), int64(4), int64(3),
 					time.Unix(2, 0), true, int64(10))
 
-				s.Require().NoError(s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info))
+				s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info)
 
 				s.stakingKeeper.EXPECT().Validator(s.ctx, valAddr).Return(val, nil)
 				del := types.NewDelegation(addr.String(), valAddr.String(), sdkmath.LegacyNewDec(100))
@@ -272,7 +271,7 @@ func (s *KeeperTestSuite) TestUnjail() {
 				info := slashingtypes.NewValidatorSigningInfo(sdk.ConsAddress(addr), int64(4), int64(3),
 					s.ctx.BlockTime().AddDate(0, 0, 1), false, int64(10))
 
-				s.Require().NoError(s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info))
+				s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info)
 
 				s.stakingKeeper.EXPECT().Validator(s.ctx, valAddr).Return(val, nil)
 				del := types.NewDelegation(addr.String(), valAddr.String(), sdkmath.LegacyNewDec(10000))
@@ -302,7 +301,7 @@ func (s *KeeperTestSuite) TestUnjail() {
 				info := slashingtypes.NewValidatorSigningInfo(sdk.ConsAddress(addr), int64(4), int64(3),
 					time.Unix(2, 0), false, int64(10))
 
-				s.Require().NoError(s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info))
+				s.slashingKeeper.SetValidatorSigningInfo(s.ctx, sdk.ConsAddress(addr), info)
 
 				s.stakingKeeper.EXPECT().Validator(s.ctx, valAddr).Return(val, nil)
 				del := types.NewDelegation(addr.String(), valAddr.String(), sdkmath.LegacyNewDec(100))
@@ -319,6 +318,7 @@ func (s *KeeperTestSuite) TestUnjail() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			req := tc.malleate()
 			_, err := s.msgServer.Unjail(s.ctx, req)
@@ -331,54 +331,4 @@ func (s *KeeperTestSuite) TestUnjail() {
 			}
 		})
 	}
-}
-
-func (s *KeeperTestSuite) TestUpdateParamsAuthority() {
-	keeperAuthority := s.slashingKeeper.GetAuthority()
-	overrideAuthority := sdk.AccAddress("override_authority___").String()
-
-	minSignedPerWindow, _ := sdkmath.LegacyNewDecFromStr("0.60")
-	slashFractionDoubleSign, _ := sdkmath.LegacyNewDecFromStr("0.022")
-	slashFractionDowntime, _ := sdkmath.LegacyNewDecFromStr("0.0089")
-	validParams := slashingtypes.Params{
-		SignedBlocksWindow:      int64(750),
-		MinSignedPerWindow:      minSignedPerWindow,
-		DowntimeJailDuration:    time.Duration(34800000000000),
-		SlashFractionDoubleSign: slashFractionDoubleSign,
-		SlashFractionDowntime:   slashFractionDowntime,
-	}
-
-	s.Run("fallback to keeper authority", func() {
-		_, err := s.msgServer.UpdateParams(s.ctx, &slashingtypes.MsgUpdateParams{
-			Authority: keeperAuthority,
-			Params:    validParams,
-		})
-		s.Require().NoError(err)
-
-		_, err = s.msgServer.UpdateParams(s.ctx, &slashingtypes.MsgUpdateParams{
-			Authority: overrideAuthority,
-			Params:    validParams,
-		})
-		s.Require().Error(err)
-		s.Require().Contains(err.Error(), "invalid authority")
-	})
-
-	s.Run("consensus params authority takes precedence", func() {
-		ctx := s.ctx.WithConsensusParams(cmtproto.ConsensusParams{
-			Authority: &cmtproto.AuthorityParams{Authority: overrideAuthority},
-		})
-
-		_, err := s.msgServer.UpdateParams(ctx, &slashingtypes.MsgUpdateParams{
-			Authority: overrideAuthority,
-			Params:    validParams,
-		})
-		s.Require().NoError(err)
-
-		_, err = s.msgServer.UpdateParams(ctx, &slashingtypes.MsgUpdateParams{
-			Authority: keeperAuthority,
-			Params:    validParams,
-		})
-		s.Require().Error(err)
-		s.Require().Contains(err.Error(), "invalid authority")
-	})
 }

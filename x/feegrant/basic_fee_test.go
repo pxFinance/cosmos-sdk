@@ -4,14 +4,15 @@ import (
 	"testing"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/feegrant"
+
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/feegrant"
 )
 
 func TestBasicFeeValidAllow(t *testing.T) {
@@ -21,10 +22,10 @@ func TestBasicFeeValidAllow(t *testing.T) {
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Height: 1})
 
 	badTime := ctx.BlockTime().AddDate(0, 0, -1)
-	allowance := &feegrant.BasicAllowance{
+	allowace := &feegrant.BasicAllowance{
 		Expiration: &badTime,
 	}
-	require.Error(t, allowance.ValidateBasic())
+	require.Error(t, allowace.ValidateBasic())
 
 	ctx = ctx.WithBlockHeader(cmtproto.Header{
 		Time: time.Now(),

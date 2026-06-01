@@ -1,14 +1,13 @@
 package client
 
 import (
-	"time"
+	txsigning "cosmossdk.io/x/tx/signing"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx"
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
 )
 
 type (
@@ -49,8 +48,6 @@ type (
 		SetFeePayer(feePayer sdk.AccAddress)
 		SetGasLimit(limit uint64)
 		SetTimeoutHeight(height uint64)
-		SetTimeoutTimestamp(timestamp time.Time)
-		SetUnordered(v bool)
 		SetFeeGranter(feeGranter sdk.AccAddress)
 		AddAuxSignerData(tx.AuxSignerData) error
 	}

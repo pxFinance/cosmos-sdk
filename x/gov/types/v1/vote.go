@@ -31,7 +31,7 @@ func (v Vote) Empty() bool {
 // Votes is a collection of Vote objects
 type Votes []*Vote
 
-// Equal returns true if two slices (order-dependent) of votes are equal.
+// Equal returns true if two slices (order-dependant) of votes are equal.
 func (v Votes) Equal(other Votes) bool {
 	if len(v) != len(other) {
 		return false
@@ -90,7 +90,7 @@ func ValidWeightedVoteOption(option WeightedVoteOption) bool {
 	return ValidVoteOption(option.Option)
 }
 
-// WeightedVoteOptions describes an array of WeightedVoteOptions
+// WeightedVoteOptions describes array of WeightedVoteOptions
 type WeightedVoteOptions []*WeightedVoteOption
 
 func (v WeightedVoteOptions) String() string {
@@ -108,11 +108,11 @@ func VoteOptionFromString(str string) (VoteOption, error) {
 	return VoteOption(option), nil
 }
 
-// WeightedVoteOptionsFromString returns weighted vote options from a string. It returns an error
+// WeightedVoteOptionsFromString returns weighted vote options from string. It returns an error
 // if the string is invalid.
 func WeightedVoteOptionsFromString(str string) (WeightedVoteOptions, error) {
 	options := WeightedVoteOptions{}
-	for option := range strings.SplitSeq(str, ",") {
+	for _, option := range strings.Split(str, ",") {
 		fields := strings.Split(option, "=")
 		option, err := VoteOptionFromString(fields[0])
 		if err != nil {
@@ -145,8 +145,8 @@ func ValidVoteOption(option VoteOption) bool {
 func (vo VoteOption) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 's':
-		_, _ = s.Write([]byte(vo.String()))
+		s.Write([]byte(vo.String()))
 	default:
-		_, _ = fmt.Fprintf(s, "%v", byte(vo))
+		s.Write([]byte(fmt.Sprintf("%v", byte(vo))))
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,13 +12,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	snapshottypes "cosmossdk.io/store/snapshots/types"
+
 	"github.com/cosmos/cosmos-sdk/server"
-	snapshottypes "github.com/cosmos/cosmos-sdk/store/v2/snapshots/types"
 )
 
 const SnapshotFileName = "_snapshot"
 
-// LoadArchiveCmd loads a portable archive format snapshot into snapshot store
+// LoadArchiveCmd load a portable archive format snapshot into snapshot store
 func LoadArchiveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "load <archive-file>",
@@ -37,15 +37,16 @@ func LoadArchiveCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to open archive file: %w", err)
 			}
-			defer fp.Close()
 			reader, err := gzip.NewReader(fp)
 			if err != nil {
 				return fmt.Errorf("failed to create gzip reader: %w", err)
 			}
-			defer reader.Close()
 
 			var snapshot snapshottypes.Snapshot
 			tr := tar.NewReader(reader)
+			if err != nil {
+				return fmt.Errorf("failed to create tar reader: %w", err)
+			}
 
 			hdr, err := tr.Next()
 			if err != nil {
@@ -79,7 +80,7 @@ func LoadArchiveCmd() *cobra.Command {
 			for i := uint32(0); i < snapshot.Chunks; i++ {
 				hdr, err = tr.Next()
 				if err != nil {
-					if errors.Is(err, io.EOF) {
+					if err == io.EOF {
 						break
 					}
 					return err

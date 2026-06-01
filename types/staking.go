@@ -4,7 +4,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 )
 
-// ValidatorUpdateDelay is the delay, in blocks, between when validator updates are returned to the
+// Delay, in blocks, between when validator updates are returned to the
 // consensus-engine and when they are applied. For example, if
 // ValidatorUpdateDelay is set to X, and if a validator set update is
 // returned with new validators at the end of block 10, then the new
@@ -12,7 +12,7 @@ import (
 //
 // This value is constant as this should not change without a hard fork.
 // For CometBFT this should be set to 1 block, for more details see:
-// https://docs.cometbft.com/v0.38/spec/abci/abci++_basic_concepts#consensusblock-execution-methods
+// https://github.com/cometbft/cometbft/blob/main/spec/abci/abci%2B%2B_basic_concepts.md#consensusblock-execution-methods
 const ValidatorUpdateDelay int64 = 1
 
 var (

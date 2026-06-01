@@ -1,7 +1,6 @@
 package autocli
 
 import (
-	"github.com/cosmos/gogoproto/proto"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -62,22 +61,10 @@ type AppOptions struct {
 //	rootCmd := initRootCmd()
 //	err = autoCliOpts.EnhanceRootCommand(rootCmd)
 func (appOptions AppOptions) EnhanceRootCommand(rootCmd *cobra.Command) error {
-	var (
-		mergedFiles flag.FileResolver
-		err         error
-	)
-
-	mergedFiles, err = proto.MergedRegistry()
-	if err != nil {
-		// we can safely ignore this error, as this should have been called somewhere earlier
-		// in the app's lifecycle.
-		mergedFiles = appOptions.ClientCtx.InterfaceRegistry
-	}
-
 	builder := &Builder{
 		Builder: flag.Builder{
 			TypeResolver:          protoregistry.GlobalTypes,
-			FileResolver:          mergedFiles,
+			FileResolver:          appOptions.ClientCtx.InterfaceRegistry,
 			AddressCodec:          appOptions.AddressCodec,
 			ValidatorAddressCodec: appOptions.ValidatorAddressCodec,
 			ConsensusAddressCodec: appOptions.ConsensusAddressCodec,

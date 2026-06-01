@@ -4,12 +4,6 @@ import (
 	protoio "github.com/cosmos/gogoproto/io"
 )
 
-// SnapshotAnnouncer defines an interface for announcing snapshot initiation at a specified height.
-type SnapshotAnnouncer interface {
-	// AnnounceSnapshotHeight informs the underlying system of a snapshot being initiated at a given height.
-	AnnounceSnapshotHeight(height int64)
-}
-
 // Snapshotter is something that can create and restore snapshots, consisting of streamed binary
 // chunks - all of which must be read from the channel and closed. If an unsupported format is
 // given, it must return ErrUnknownFormat (possibly wrapped with fmt.Errorf).
@@ -32,20 +26,20 @@ type Snapshotter interface {
 	Restore(height uint64, format uint32, protoReader protoio.Reader) (SnapshotItem, error)
 }
 
-// ExtensionPayloadReader reads extension payloads,
-// it returns io.EOF when it reaches either end of stream or the extension boundaries.
+// ExtensionPayloadReader read extension payloads,
+// it returns io.EOF when reached either end of stream or the extension boundaries.
 type ExtensionPayloadReader = func() ([]byte, error)
 
 // ExtensionPayloadWriter is a helper to write extension payloads to underlying stream.
 type ExtensionPayloadWriter = func([]byte) error
 
 // ExtensionSnapshotter is an extension Snapshotter that is appended to the snapshot stream.
-// ExtensionSnapshotter has a unique name and manages its own internal formats.
+// ExtensionSnapshotter has an unique name and manages it's own internal formats.
 type ExtensionSnapshotter interface {
 	// SnapshotName returns the name of snapshotter, it should be unique in the manager.
 	SnapshotName() string
 
-	// SnapshotFormat returns the default format the extension snapshotter uses to encode the
+	// SnapshotFormat returns the default format the extension snapshotter use to encode the
 	// payloads when taking a snapshot.
 	// It's defined within the extension, different from the global format for the whole state-sync snapshot.
 	SnapshotFormat() uint32
@@ -57,6 +51,6 @@ type ExtensionSnapshotter interface {
 	SnapshotExtension(height uint64, payloadWriter ExtensionPayloadWriter) error
 
 	// RestoreExtension restores an extension state snapshot,
-	// the payload reader returns `io.EOF` when it reaches the extension boundaries.
+	// the payload reader returns `io.EOF` when reached the extension boundaries.
 	RestoreExtension(height uint64, format uint32, payloadReader ExtensionPayloadReader) error
 }

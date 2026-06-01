@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/math"
@@ -17,8 +17,6 @@ import (
 )
 
 func createValidatorAccs(t *testing.T, f *fixture) ([]sdk.AccAddress, []types.Validator) {
-	t.Helper()
-
 	addrs, _, validators := createValidators(&testing.T{}, f, []int64{9, 8, 7})
 	header := cmtproto.Header{
 		ChainID: "HelloChain",

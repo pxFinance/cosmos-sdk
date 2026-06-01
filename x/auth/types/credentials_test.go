@@ -10,7 +10,7 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 )
 
-func TestNewModuleCredentials(t *testing.T) {
+func TestNewModuleCrendentials(t *testing.T) {
 	// wrong derivation keys
 	_, err := authtypes.NewModuleCredential("group", []byte{})
 	require.Error(t, err, "derivation keys must be non empty")

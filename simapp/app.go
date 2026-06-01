@@ -1,21 +1,40 @@
+//go:build app_v1
+
 package simapp
 
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
-
-	abci "github.com/cometbft/cometbft/abci/types"
-	dbm "github.com/cosmos/cosmos-db"
-	"github.com/cosmos/gogoproto/proto"
-	"github.com/spf13/cast"
+	"io"
+	"os"
 
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
 	"cosmossdk.io/client/v2/autocli"
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	"cosmossdk.io/core/appmodule"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/circuit"
+	circuitkeeper "cosmossdk.io/x/circuit/keeper"
+	circuittypes "cosmossdk.io/x/circuit/types"
+	"cosmossdk.io/x/evidence"
+	evidencekeeper "cosmossdk.io/x/evidence/keeper"
+	evidencetypes "cosmossdk.io/x/evidence/types"
+	"cosmossdk.io/x/feegrant"
+	feegrantkeeper "cosmossdk.io/x/feegrant/keeper"
+	feegrantmodule "cosmossdk.io/x/feegrant/module"
+	"cosmossdk.io/x/nft"
+	nftkeeper "cosmossdk.io/x/nft/keeper"
+	nftmodule "cosmossdk.io/x/nft/module"
+	"cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/upgrade"
+	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
+	upgradetypes "cosmossdk.io/x/upgrade/types"
+	abci "github.com/cometbft/cometbft/abci/types"
+	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/gogoproto/proto"
+	"github.com/spf13/cast"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -32,10 +51,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	"github.com/cosmos/cosmos-sdk/std"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	testdata_pulsar "github.com/cosmos/cosmos-sdk/testutil/testdata/testpb"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	sigtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth"
@@ -44,6 +63,7 @@ import (
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	"github.com/cosmos/cosmos-sdk/x/auth/posthandler"
 	authsims "github.com/cosmos/cosmos-sdk/x/auth/simulation"
+	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -58,18 +78,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/consensus"
 	consensusparamkeeper "github.com/cosmos/cosmos-sdk/x/consensus/keeper"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
+	"github.com/cosmos/cosmos-sdk/x/crisis"
+	crisiskeeper "github.com/cosmos/cosmos-sdk/x/crisis/keeper"
+	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
 	distr "github.com/cosmos/cosmos-sdk/x/distribution"
 	distrkeeper "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
-	"github.com/cosmos/cosmos-sdk/x/epochs"
-	epochskeeper "github.com/cosmos/cosmos-sdk/x/epochs/keeper"
-	epochstypes "github.com/cosmos/cosmos-sdk/x/epochs/types"
-	"github.com/cosmos/cosmos-sdk/x/evidence"
-	evidencekeeper "github.com/cosmos/cosmos-sdk/x/evidence/keeper"
-	evidencetypes "github.com/cosmos/cosmos-sdk/x/evidence/types"
-	"github.com/cosmos/cosmos-sdk/x/feegrant"
-	feegrantkeeper "github.com/cosmos/cosmos-sdk/x/feegrant/keeper"
-	feegrantmodule "github.com/cosmos/cosmos-sdk/x/feegrant/module"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/gov"
@@ -77,19 +91,23 @@ import (
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	"github.com/cosmos/cosmos-sdk/x/group"
+	groupkeeper "github.com/cosmos/cosmos-sdk/x/group/keeper"
+	groupmodule "github.com/cosmos/cosmos-sdk/x/group/module"
 	"github.com/cosmos/cosmos-sdk/x/mint"
 	mintkeeper "github.com/cosmos/cosmos-sdk/x/mint/keeper"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	"github.com/cosmos/cosmos-sdk/x/params"
+	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
+	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	paramproposal "github.com/cosmos/cosmos-sdk/x/params/types/proposal"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing"
-	"github.com/cosmos/cosmos-sdk/x/upgrade"
-	upgradekeeper "github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
-	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 const appName = "SimApp"
@@ -106,6 +124,7 @@ var (
 		stakingtypes.BondedPoolName:    {authtypes.Burner, authtypes.Staking},
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
+		nft.ModuleName:                 nil,
 	}
 )
 
@@ -125,9 +144,11 @@ type SimApp struct {
 	interfaceRegistry types.InterfaceRegistry
 
 	// keys to access the substores
-	keys map[string]*storetypes.KVStoreKey
+	keys  map[string]*storetypes.KVStoreKey
+	tkeys map[string]*storetypes.TransientStoreKey
+	okeys map[string]*storetypes.ObjectStoreKey
 
-	// essential keepers
+	// keepers
 	AccountKeeper         authkeeper.AccountKeeper
 	BankKeeper            bankkeeper.BaseKeeper
 	StakingKeeper         *stakingkeeper.Keeper
@@ -135,14 +156,16 @@ type SimApp struct {
 	MintKeeper            mintkeeper.Keeper
 	DistrKeeper           distrkeeper.Keeper
 	GovKeeper             govkeeper.Keeper
+	CrisisKeeper          *crisiskeeper.Keeper
 	UpgradeKeeper         *upgradekeeper.Keeper
+	ParamsKeeper          paramskeeper.Keeper
+	AuthzKeeper           authzkeeper.Keeper
 	EvidenceKeeper        evidencekeeper.Keeper
+	FeeGrantKeeper        feegrantkeeper.Keeper
+	GroupKeeper           groupkeeper.Keeper
+	NFTKeeper             nftkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
-
-	// supplementary keepers
-	FeeGrantKeeper feegrantkeeper.Keeper
-	AuthzKeeper    authzkeeper.Keeper
-	EpochsKeeper   *epochskeeper.Keeper
+	CircuitKeeper         circuitkeeper.Keeper
 
 	// the module manager
 	ModuleManager      *module.Manager
@@ -167,6 +190,7 @@ func init() {
 func NewSimApp(
 	logger log.Logger,
 	db dbm.DB,
+	traceStore io.Writer,
 	loadLatest bool,
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
@@ -184,7 +208,7 @@ func NewSimApp(
 	})
 	appCodec := codec.NewProtoCodec(interfaceRegistry)
 	legacyAmino := codec.NewLegacyAmino()
-	txConfig := authtx.NewTxConfig(appCodec, authtx.DefaultSignModes)
+	txConfig := tx.NewTxConfig(appCodec, tx.DefaultSignModes)
 
 	if err := interfaceRegistry.SigningContext().Validate(); err != nil {
 		panic(err)
@@ -227,24 +251,17 @@ func NewSimApp(
 	baseAppOptions = append(baseAppOptions, voteExtOp, baseapp.SetOptimisticExecution())
 
 	bApp := baseapp.NewBaseApp(appName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
+	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
 
 	keys := storetypes.NewKVStoreKeys(
-		authtypes.StoreKey,
-		banktypes.StoreKey,
-		stakingtypes.StoreKey,
-		minttypes.StoreKey,
-		distrtypes.StoreKey,
-		slashingtypes.StoreKey,
-		govtypes.StoreKey,
-		consensusparamtypes.StoreKey,
-		upgradetypes.StoreKey,
-		feegrant.StoreKey,
-		evidencetypes.StoreKey,
-		authzkeeper.StoreKey,
-		epochstypes.StoreKey,
+		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey, crisistypes.StoreKey,
+		minttypes.StoreKey, distrtypes.StoreKey, slashingtypes.StoreKey,
+		govtypes.StoreKey, paramstypes.StoreKey, consensusparamtypes.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey,
+		evidencetypes.StoreKey, circuittypes.StoreKey,
+		authzkeeper.StoreKey, nftkeeper.StoreKey, group.StoreKey,
 	)
 
 	// register streaming services
@@ -252,6 +269,8 @@ func NewSimApp(
 		panic(err)
 	}
 
+	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, banktypes.TStoreKey)
+	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 	app := &SimApp{
 		BaseApp:           bApp,
 		legacyAmino:       legacyAmino,
@@ -259,32 +278,24 @@ func NewSimApp(
 		txConfig:          txConfig,
 		interfaceRegistry: interfaceRegistry,
 		keys:              keys,
+		tkeys:             tkeys,
+		okeys:             okeys,
 	}
 
+	app.ParamsKeeper = initParamsKeeper(appCodec, legacyAmino, keys[paramstypes.StoreKey], tkeys[paramstypes.TStoreKey])
+
 	// set the BaseApp's parameter store
-	app.ConsensusParamsKeeper = consensusparamkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[consensusparamtypes.StoreKey]),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		runtime.EventService{},
-	)
+	app.ConsensusParamsKeeper = consensusparamkeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[consensusparamtypes.StoreKey]), authtypes.NewModuleAddress(govtypes.ModuleName).String(), runtime.EventService{})
 	bApp.SetParamStore(app.ConsensusParamsKeeper.ParamsStore)
 
 	// add keepers
-	app.AccountKeeper = authkeeper.NewAccountKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[authtypes.StoreKey]),
-		authtypes.ProtoBaseAccount,
-		maccPerms,
-		authcodec.NewBech32Codec(sdk.Bech32MainPrefix),
-		sdk.Bech32MainPrefix,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		authkeeper.WithUnorderedTransactions(true),
-	)
+	app.AccountKeeper = authkeeper.NewAccountKeeper(appCodec, runtime.NewKVStoreService(keys[authtypes.StoreKey]), authtypes.ProtoBaseAccount, maccPerms, authcodec.NewBech32Codec(sdk.Bech32MainPrefix), sdk.Bech32MainPrefix, authtypes.NewModuleAddress(govtypes.ModuleName).String())
 
 	app.BankKeeper = bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		runtime.NewTransientKVStoreService(tkeys[banktypes.TStoreKey]),
+		okeys[banktypes.ObjectStoreKey],
 		app.AccountKeeper,
 		BlockedAddresses(),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -292,12 +303,12 @@ func NewSimApp(
 	)
 
 	// optional: enable sign mode textual by overwriting the default tx config (after setting the bank keeper)
-	enabledSignModes := append(authtx.DefaultSignModes, sigtypes.SignMode_SIGN_MODE_TEXTUAL)
-	txConfigOpts := authtx.ConfigOptions{
+	enabledSignModes := append(tx.DefaultSignModes, sigtypes.SignMode_SIGN_MODE_TEXTUAL)
+	txConfigOpts := tx.ConfigOptions{
 		EnabledSignModes:           enabledSignModes,
 		TextualCoinMetadataQueryFn: txmodule.NewBankKeeperCoinMetadataQueryFn(app.BankKeeper),
 	}
-	txConfig, err := authtx.NewTxConfigWithOptions(
+	txConfig, err := tx.NewTxConfigWithOptions(
 		appCodec,
 		txConfigOpts,
 	)
@@ -307,64 +318,39 @@ func NewSimApp(
 	app.txConfig = txConfig
 
 	app.StakingKeeper = stakingkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[stakingtypes.StoreKey]),
-		app.AccountKeeper,
-		app.BankKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		authcodec.NewBech32Codec(sdk.Bech32PrefixValAddr),
-		authcodec.NewBech32Codec(sdk.Bech32PrefixConsAddr),
+		appCodec, runtime.NewKVStoreService(keys[stakingtypes.StoreKey]), app.AccountKeeper, app.BankKeeper, authtypes.NewModuleAddress(govtypes.ModuleName).String(), authcodec.NewBech32Codec(sdk.Bech32PrefixValAddr), authcodec.NewBech32Codec(sdk.Bech32PrefixConsAddr),
 	)
-	app.MintKeeper = mintkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[minttypes.StoreKey]),
-		app.StakingKeeper,
-		app.AccountKeeper,
-		app.BankKeeper,
-		authtypes.FeeCollectorName,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		// mintkeeper.WithMintFn(mintkeeper.DefaultMintFn(minttypes.DefaultInflationCalculationFn)), custom mintFn can be added here
-	)
+	app.MintKeeper = mintkeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[minttypes.StoreKey]), app.StakingKeeper, app.AccountKeeper, app.BankKeeper, authtypes.FeeCollectorName, authtypes.NewModuleAddress(govtypes.ModuleName).String())
 
-	app.DistrKeeper = distrkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[distrtypes.StoreKey]),
-		app.AccountKeeper,
-		app.BankKeeper,
-		app.StakingKeeper,
-		authtypes.FeeCollectorName,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-	)
+	app.DistrKeeper = distrkeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[distrtypes.StoreKey]), app.AccountKeeper, app.BankKeeper, app.StakingKeeper, authtypes.FeeCollectorName, authtypes.NewModuleAddress(govtypes.ModuleName).String())
 
 	app.SlashingKeeper = slashingkeeper.NewKeeper(
-		appCodec,
-		legacyAmino,
-		runtime.NewKVStoreService(keys[slashingtypes.StoreKey]),
-		app.StakingKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		appCodec, legacyAmino, runtime.NewKVStoreService(keys[slashingtypes.StoreKey]), app.StakingKeeper, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	app.FeeGrantKeeper = feegrantkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[feegrant.StoreKey]),
-		app.AccountKeeper,
-	)
+	invCheckPeriod := cast.ToUint(appOpts.Get(server.FlagInvCheckPeriod))
+	app.CrisisKeeper = crisiskeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[crisistypes.StoreKey]), invCheckPeriod,
+		app.BankKeeper, authtypes.FeeCollectorName, authtypes.NewModuleAddress(govtypes.ModuleName).String(), app.AccountKeeper.AddressCodec())
+
+	app.FeeGrantKeeper = feegrantkeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[feegrant.StoreKey]), app.AccountKeeper)
 
 	// register the staking hooks
 	// NOTE: stakingKeeper above is passed by reference, so that it will contain these hooks
 	app.StakingKeeper.SetHooks(
-		stakingtypes.NewMultiStakingHooks(
-			app.DistrKeeper.Hooks(),
-			app.SlashingKeeper.Hooks(),
-		),
+		stakingtypes.NewMultiStakingHooks(app.DistrKeeper.Hooks(), app.SlashingKeeper.Hooks()),
 	)
 
-	app.AuthzKeeper = authzkeeper.NewKeeper(
-		runtime.NewKVStoreService(keys[authzkeeper.StoreKey]),
-		appCodec,
-		app.MsgServiceRouter(),
-		app.AccountKeeper,
-	)
+	app.CircuitKeeper = circuitkeeper.NewKeeper(appCodec, runtime.NewKVStoreService(keys[circuittypes.StoreKey]), authtypes.NewModuleAddress(govtypes.ModuleName).String(), app.AccountKeeper.AddressCodec())
+	app.BaseApp.SetCircuitBreaker(&app.CircuitKeeper)
+
+	app.AuthzKeeper = authzkeeper.NewKeeper(runtime.NewKVStoreService(keys[authzkeeper.StoreKey]), appCodec, app.MsgServiceRouter(), app.AccountKeeper)
+
+	groupConfig := group.DefaultConfig()
+	/*
+		Example of setting group params:
+		groupConfig.MaxMetadataLen = 1000
+	*/
+	app.GroupKeeper = groupkeeper.NewKeeper(keys[group.StoreKey], appCodec, app.MsgServiceRouter(), app.AccountKeeper, groupConfig)
 
 	// get skipUpgradeHeights from the app options
 	skipUpgradeHeights := map[int64]bool{}
@@ -373,36 +359,23 @@ func NewSimApp(
 	}
 	homePath := cast.ToString(appOpts.Get(flags.FlagHome))
 	// set the governance module account as the authority for conducting upgrades
-	app.UpgradeKeeper = upgradekeeper.NewKeeper(
-		skipUpgradeHeights,
-		runtime.NewKVStoreService(keys[upgradetypes.StoreKey]),
-		appCodec,
-		homePath,
-		app.BaseApp,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-	)
+	app.UpgradeKeeper = upgradekeeper.NewKeeper(skipUpgradeHeights, runtime.NewKVStoreService(keys[upgradetypes.StoreKey]), appCodec, homePath, app.BaseApp, authtypes.NewModuleAddress(govtypes.ModuleName).String())
 
 	// Register the proposal types
 	// Deprecated: Avoid adding new handlers, instead use the new proposal flow
 	// by granting the governance module the right to execute the message.
 	// See: https://docs.cosmos.network/main/modules/gov#proposal-messages
 	govRouter := govv1beta1.NewRouter()
-	govRouter.AddRoute(govtypes.RouterKey, govv1beta1.ProposalHandler)
+	govRouter.AddRoute(govtypes.RouterKey, govv1beta1.ProposalHandler).
+		AddRoute(paramproposal.RouterKey, params.NewParamChangeProposalHandler(app.ParamsKeeper))
 	govConfig := govtypes.DefaultConfig()
 	/*
 		Example of setting gov params:
 		govConfig.MaxMetadataLen = 10000
 	*/
 	govKeeper := govkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[govtypes.StoreKey]),
-		app.AccountKeeper,
-		app.BankKeeper,
-		app.DistrKeeper,
-		app.MsgServiceRouter(),
-		govConfig,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-		govkeeper.NewDefaultCalculateVoteResultsAndVotingPower(app.StakingKeeper),
+		appCodec, runtime.NewKVStoreService(keys[govtypes.StoreKey]), app.AccountKeeper, app.BankKeeper,
+		app.StakingKeeper, app.DistrKeeper, app.MsgServiceRouter(), govConfig, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
 	// Set legacy router for backwards compatibility with gov v1beta1
@@ -414,32 +387,20 @@ func NewSimApp(
 		),
 	)
 
+	app.NFTKeeper = nftkeeper.NewKeeper(runtime.NewKVStoreService(keys[nftkeeper.StoreKey]), appCodec, app.AccountKeeper, app.BankKeeper)
+
 	// create evidence keeper with router
 	evidenceKeeper := evidencekeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[evidencetypes.StoreKey]),
-		app.StakingKeeper,
-		app.SlashingKeeper,
-		app.AccountKeeper.AddressCodec(),
-		runtime.ProvideCometInfoService(),
+		appCodec, runtime.NewKVStoreService(keys[evidencetypes.StoreKey]), app.StakingKeeper, app.SlashingKeeper, app.AccountKeeper.AddressCodec(), runtime.ProvideCometInfoService(),
 	)
 	// If evidence needs to be handled for the app, set routes in router here and seal
 	app.EvidenceKeeper = *evidenceKeeper
 
-	epochsKeeper := epochskeeper.NewKeeper(
-		runtime.NewKVStoreService(keys[epochstypes.StoreKey]),
-		appCodec,
-	)
-
-	app.EpochsKeeper = &epochsKeeper
-
-	app.EpochsKeeper.SetHooks(
-		epochstypes.NewMultiEpochHooks(
-		// insert epoch hooks receivers here
-		),
-	)
-
 	/****  Module Options ****/
+
+	// NOTE: we may consider parsing `appOpts` inside module constructors. For the moment
+	// we prefer to be more strict in what arguments the modules expect.
+	skipGenesisInvariants := cast.ToBool(appOpts.Get(crisis.FlagSkipGenesisInvariants))
 
 	// NOTE: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.
@@ -448,24 +409,28 @@ func NewSimApp(
 			app.AccountKeeper, app.StakingKeeper, app,
 			txConfig,
 		),
-		auth.NewAppModule(appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts),
+		auth.NewAppModule(appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts, app.GetSubspace(authtypes.ModuleName)),
 		vesting.NewAppModule(app.AccountKeeper, app.BankKeeper),
-		bank.NewAppModule(appCodec, app.BankKeeper, app.AccountKeeper),
+		bank.NewAppModule(appCodec, app.BankKeeper, app.AccountKeeper, app.GetSubspace(banktypes.ModuleName)),
+		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)),
 		feegrantmodule.NewAppModule(appCodec, app.AccountKeeper, app.BankKeeper, app.FeeGrantKeeper, app.interfaceRegistry),
-		gov.NewAppModule(appCodec, &app.GovKeeper, app.AccountKeeper, app.BankKeeper),
-		mint.NewAppModule(appCodec, app.MintKeeper, app.AccountKeeper, nil),
-		slashing.NewAppModule(appCodec, app.SlashingKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.interfaceRegistry),
-		distr.NewAppModule(appCodec, app.DistrKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper),
-		staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper),
+		gov.NewAppModule(appCodec, &app.GovKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(govtypes.ModuleName)),
+		mint.NewAppModule(appCodec, app.MintKeeper, app.AccountKeeper, nil, app.GetSubspace(minttypes.ModuleName)),
+		slashing.NewAppModule(appCodec, app.SlashingKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.GetSubspace(slashingtypes.ModuleName), app.interfaceRegistry),
+		distr.NewAppModule(appCodec, app.DistrKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.GetSubspace(distrtypes.ModuleName)),
+		staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(stakingtypes.ModuleName)),
 		upgrade.NewAppModule(app.UpgradeKeeper, app.AccountKeeper.AddressCodec()),
 		evidence.NewAppModule(app.EvidenceKeeper),
+		params.NewAppModule(app.ParamsKeeper),
 		authzmodule.NewAppModule(appCodec, app.AuthzKeeper, app.AccountKeeper, app.BankKeeper, app.interfaceRegistry),
+		groupmodule.NewAppModule(appCodec, app.GroupKeeper, app.AccountKeeper, app.BankKeeper, app.interfaceRegistry),
+		nftmodule.NewAppModule(appCodec, app.NFTKeeper, app.AccountKeeper, app.BankKeeper, app.interfaceRegistry),
 		consensus.NewAppModule(appCodec, app.ConsensusParamsKeeper),
-		epochs.NewAppModule(app.EpochsKeeper),
+		circuit.NewAppModule(appCodec, app.CircuitKeeper),
 	)
 
 	// BasicModuleManager defines the module BasicManager is in charge of setting up basic,
-	// non-dependent module elements, such as codec registration and genesis verification.
+	// non-dependant module elements, such as codec registration and genesis verification.
 	// By default it is composed of all the module from the module manager.
 	// Additionally, app module basics can be overwritten by passing them as argument.
 	app.BasicModuleManager = module.NewBasicManagerFromManager(
@@ -473,7 +438,9 @@ func NewSimApp(
 		map[string]module.AppModuleBasic{
 			genutiltypes.ModuleName: genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
 			govtypes.ModuleName: gov.NewAppModuleBasic(
-				[]govclient.ProposalHandler{},
+				[]govclient.ProposalHandler{
+					paramsclient.ProposalHandler,
+				},
 			),
 		})
 	app.BasicModuleManager.RegisterLegacyAminoCodec(legacyAmino)
@@ -482,7 +449,6 @@ func NewSimApp(
 	// NOTE: upgrade module is required to be prioritized
 	app.ModuleManager.SetOrderPreBlockers(
 		upgradetypes.ModuleName,
-		authtypes.ModuleName,
 	)
 	// During begin block slashing happens after distr.BeginBlocker so that
 	// there is nothing left over in the validator fee pool, so as to keep the
@@ -496,61 +462,34 @@ func NewSimApp(
 		stakingtypes.ModuleName,
 		genutiltypes.ModuleName,
 		authz.ModuleName,
-		epochstypes.ModuleName,
 	)
 	app.ModuleManager.SetOrderEndBlockers(
-		banktypes.ModuleName,
+		crisistypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
 		genutiltypes.ModuleName,
 		feegrant.ModuleName,
+		group.ModuleName,
+		banktypes.ModuleName,
 	)
 
 	// NOTE: The genutils module must occur after staking so that pools are
 	// properly initialized with tokens from genesis accounts.
 	// NOTE: The genutils module must also occur after auth so that it can access the params from auth.
 	genesisModuleOrder := []string{
-		authtypes.ModuleName,
-		banktypes.ModuleName,
-		distrtypes.ModuleName,
-		stakingtypes.ModuleName,
-		slashingtypes.ModuleName,
-		govtypes.ModuleName,
-		minttypes.ModuleName,
-		genutiltypes.ModuleName,
-		evidencetypes.ModuleName,
-		authz.ModuleName,
-		feegrant.ModuleName,
-		upgradetypes.ModuleName,
-		vestingtypes.ModuleName,
-		consensusparamtypes.ModuleName,
-		epochstypes.ModuleName,
+		authtypes.ModuleName, banktypes.ModuleName,
+		distrtypes.ModuleName, stakingtypes.ModuleName, slashingtypes.ModuleName, govtypes.ModuleName,
+		minttypes.ModuleName, crisistypes.ModuleName, genutiltypes.ModuleName, evidencetypes.ModuleName, authz.ModuleName,
+		feegrant.ModuleName, nft.ModuleName, group.ModuleName, paramstypes.ModuleName, upgradetypes.ModuleName,
+		vestingtypes.ModuleName, consensusparamtypes.ModuleName, circuittypes.ModuleName,
 	}
-
-	exportModuleOrder := []string{
-		consensusparamtypes.ModuleName,
-		authtypes.ModuleName,
-		banktypes.ModuleName,
-		distrtypes.ModuleName,
-		stakingtypes.ModuleName,
-		slashingtypes.ModuleName,
-		govtypes.ModuleName,
-		minttypes.ModuleName,
-		genutiltypes.ModuleName,
-		evidencetypes.ModuleName,
-		authz.ModuleName,
-		feegrant.ModuleName,
-		upgradetypes.ModuleName,
-		vestingtypes.ModuleName,
-		epochstypes.ModuleName,
-	}
-
 	app.ModuleManager.SetOrderInitGenesis(genesisModuleOrder...)
-	app.ModuleManager.SetOrderExportGenesis(exportModuleOrder...)
+	app.ModuleManager.SetOrderExportGenesis(genesisModuleOrder...)
 
 	// Uncomment if you want to set a custom migration order here.
 	// app.ModuleManager.SetOrderMigrations(custom order)
 
+	app.ModuleManager.RegisterInvariants(app.CrisisKeeper)
 	app.configurator = module.NewConfigurator(app.appCodec, app.MsgServiceRouter(), app.GRPCQueryRouter())
 	err = app.ModuleManager.RegisterServices(app.configurator)
 	if err != nil {
@@ -577,7 +516,7 @@ func NewSimApp(
 	// NOTE: this is not required apps that don't use the simulator for fuzz testing
 	// transactions
 	overrideModules := map[string]module.AppModuleSimulation{
-		authtypes.ModuleName: auth.NewAppModule(app.appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts),
+		authtypes.ModuleName: auth.NewAppModule(app.appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts, app.GetSubspace(authtypes.ModuleName)),
 	}
 	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, overrideModules)
 
@@ -585,6 +524,8 @@ func NewSimApp(
 
 	// initialize stores
 	app.MountKVStores(keys)
+	app.MountTransientStores(tkeys)
+	app.MountObjectStores(okeys)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)
@@ -608,6 +549,19 @@ func NewSimApp(
 	// upgrade.
 	app.setPostHandler()
 
+	// At startup, after all modules have been registered, check that all prot
+	// annotations are correct.
+	protoFiles, err := proto.MergedRegistry()
+	if err != nil {
+		panic(err)
+	}
+	err = msgservice.ValidateProtoAnnotations(protoFiles)
+	if err != nil {
+		// Once we switch to using protoreflect-based antehandlers, we might
+		// want to panic here instead of logging a warning.
+		fmt.Fprintln(os.Stderr, err.Error())
+	}
+
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			panic(fmt.Errorf("error loading last version: %w", err))
@@ -618,18 +572,16 @@ func NewSimApp(
 }
 
 func (app *SimApp) setAnteHandler(txConfig client.TxConfig) {
-	anteHandler, err := ante.NewAnteHandler(
-		ante.HandlerOptions{
-			AccountKeeper:   app.AccountKeeper,
-			BankKeeper:      app.BankKeeper,
-			SignModeHandler: txConfig.SignModeHandler(),
-			FeegrantKeeper:  app.FeeGrantKeeper,
-			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
-			SigVerifyOptions: []ante.SigVerificationDecoratorOption{
-				// change below as needed.
-				ante.WithUnorderedTxGasCost(ante.DefaultUnorderedTxGasCost),
-				ante.WithMaxUnorderedTxTimeoutDuration(ante.DefaultMaxTimeoutDuration),
+	anteHandler, err := NewAnteHandler(
+		HandlerOptions{
+			ante.HandlerOptions{
+				AccountKeeper:   app.AccountKeeper,
+				BankKeeper:      app.BankKeeper,
+				SignModeHandler: txConfig.SignModeHandler(),
+				FeegrantKeeper:  app.FeeGrantKeeper,
+				SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 			},
+			&app.CircuitKeeper,
 		},
 	)
 	if err != nil {
@@ -655,7 +607,7 @@ func (app *SimApp) setPostHandler() {
 func (app *SimApp) Name() string { return app.BaseApp.Name() }
 
 // PreBlocker application updates every pre block
-func (app *SimApp) PreBlocker(ctx sdk.Context, _ *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+func (app *SimApp) PreBlocker(ctx sdk.Context, _ *abci.FinalizeBlockRequest) (*sdk.ResponsePreBlock, error) {
 	return app.ModuleManager.PreBlock(ctx)
 }
 
@@ -674,15 +626,12 @@ func (a *SimApp) Configurator() module.Configurator {
 }
 
 // InitChainer application update at chain initialization
-func (app *SimApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+func (app *SimApp) InitChainer(ctx sdk.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
 	var genesisState GenesisState
 	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
 		panic(err)
 	}
-	err := app.UpgradeKeeper.SetModuleVersionMap(ctx, app.ModuleManager.GetVersionMap())
-	if err != nil {
-		return nil, err
-	}
+	app.UpgradeKeeper.SetModuleVersionMap(ctx, app.ModuleManager.GetVersionMap())
 	return app.ModuleManager.InitGenesis(ctx, app.appCodec, genesisState)
 }
 
@@ -760,6 +709,14 @@ func (app *SimApp) GetStoreKeys() []storetypes.StoreKey {
 	return keys
 }
 
+// GetSubspace returns a param subspace for a given module name.
+//
+// NOTE: This is solely to be used for testing purposes.
+func (app *SimApp) GetSubspace(moduleName string) paramstypes.Subspace {
+	subspace, _ := app.ParamsKeeper.GetSubspace(moduleName)
+	return subspace
+}
+
 // SimulationManager implements the SimulationApp interface
 func (app *SimApp) SimulationManager() *module.SimulationManager {
 	return app.sm
@@ -789,7 +746,7 @@ func (app *SimApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APICon
 
 // RegisterTxService implements the Application.RegisterTxService method.
 func (app *SimApp) RegisterTxService(clientCtx client.Context) {
-	authtx.RegisterTxService(app.GRPCQueryRouter(), clientCtx, app.Simulate, app.interfaceRegistry)
+	authtx.RegisterTxService(app.BaseApp.GRPCQueryRouter(), clientCtx, app.BaseApp.Simulate, app.interfaceRegistry)
 }
 
 // RegisterTendermintService implements the Application.RegisterTendermintService method.
@@ -797,23 +754,26 @@ func (app *SimApp) RegisterTendermintService(clientCtx client.Context) {
 	cmtApp := server.NewCometABCIWrapper(app)
 	cmtservice.RegisterTendermintService(
 		clientCtx,
-		app.GRPCQueryRouter(),
+		app.BaseApp.GRPCQueryRouter(),
 		app.interfaceRegistry,
 		cmtApp.Query,
 	)
 }
 
 func (app *SimApp) RegisterNodeService(clientCtx client.Context, cfg config.Config) {
-	nodeservice.RegisterNodeService(clientCtx, app.GRPCQueryRouter(), cfg, func() int64 {
-		return app.CommitMultiStore().EarliestVersion()
-	})
+	nodeservice.RegisterNodeService(clientCtx, app.GRPCQueryRouter(), cfg)
 }
 
 // GetMaccPerms returns a copy of the module account permissions
 //
 // NOTE: This is solely to be used for testing purposes.
 func GetMaccPerms() map[string][]string {
-	return maps.Clone(maccPerms)
+	dupMaccPerms := make(map[string][]string)
+	for k, v := range maccPerms {
+		dupMaccPerms[k] = v
+	}
+
+	return dupMaccPerms
 }
 
 // BlockedAddresses returns all the app's blocked account addresses.
@@ -827,4 +787,20 @@ func BlockedAddresses() map[string]bool {
 	delete(modAccAddrs, authtypes.NewModuleAddress(govtypes.ModuleName).String())
 
 	return modAccAddrs
+}
+
+// initParamsKeeper init params keeper and its subspaces
+func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino, key, tkey storetypes.StoreKey) paramskeeper.Keeper {
+	paramsKeeper := paramskeeper.NewKeeper(appCodec, legacyAmino, key, tkey)
+
+	paramsKeeper.Subspace(authtypes.ModuleName)
+	paramsKeeper.Subspace(banktypes.ModuleName)
+	paramsKeeper.Subspace(stakingtypes.ModuleName)
+	paramsKeeper.Subspace(minttypes.ModuleName)
+	paramsKeeper.Subspace(distrtypes.ModuleName)
+	paramsKeeper.Subspace(slashingtypes.ModuleName)
+	paramsKeeper.Subspace(govtypes.ModuleName)
+	paramsKeeper.Subspace(crisistypes.ModuleName)
+
+	return paramsKeeper
 }

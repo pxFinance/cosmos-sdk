@@ -4,13 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -168,9 +167,8 @@ func ReadPersistentCommandFlags(clientCtx Context, flagSet *pflag.FlagSet) (Cont
 					MinVersion: tls.VersionTLS12,
 				})))
 			}
-			dialOpts = append(dialOpts, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
 
-			grpcClient, err := grpc.NewClient(grpcURI, dialOpts...)
+			grpcClient, err := grpc.Dial(grpcURI, dialOpts...) // nolint:staticcheck // grpc.Dial is deprecated but we still use it
 			if err != nil {
 				return Context{}, err
 			}

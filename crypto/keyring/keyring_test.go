@@ -75,7 +75,7 @@ func TestNewKeyring(t *testing.T) {
 			dir:         t.TempDir(),
 			userInput:   strings.NewReader(""),
 			cdc:         cdc,
-			expectedErr: ErrUnknownBackend,
+			expectedErr: ErrUnknownBacked,
 		},
 	}
 	for _, tt := range tests {
@@ -930,8 +930,7 @@ func TestImportPubKey(t *testing.T) {
 			if tt.expectedErr == nil {
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedErr.Error())
+				require.Equal(t, err, tt.expectedErr)
 			}
 		})
 	}
@@ -1514,14 +1513,14 @@ func TestAltKeyring_KeyByAddress(t *testing.T) {
 		name        string
 		backend     string
 		uid         string
-		getAddress  func(*Record) (sdk.AccAddress, error)
+		getAddres   func(*Record) (sdk.AccAddress, error)
 		expectedErr error
 	}{
 		{
 			name:    "correct get",
 			backend: BackendTest,
 			uid:     "okTest",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return k.GetAddress()
 			},
 			expectedErr: nil,
@@ -1530,7 +1529,7 @@ func TestAltKeyring_KeyByAddress(t *testing.T) {
 			name:    "not found key",
 			backend: BackendTest,
 			uid:     "notFoundUid",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return nil, nil
 			},
 			expectedErr: sdkerrors.ErrKeyNotFound,
@@ -1543,7 +1542,7 @@ func TestAltKeyring_KeyByAddress(t *testing.T) {
 
 			mnemonic, _, err := kr.NewMnemonic(tt.uid, English, sdk.FullFundraiserPath, DefaultBIP39Passphrase, hd.Secp256k1)
 			require.NoError(t, err)
-			addr, err := tt.getAddress(mnemonic)
+			addr, err := tt.getAddres(mnemonic)
 			require.NoError(t, err)
 
 			key, err := kr.KeyByAddress(addr)
@@ -1629,14 +1628,14 @@ func TestAltKeyring_DeleteByAddress(t *testing.T) {
 		name        string
 		backend     string
 		uid         string
-		getAddress  func(*Record) (sdk.AccAddress, error)
+		getAddres   func(*Record) (sdk.AccAddress, error)
 		expectedErr error
 	}{
 		{
 			name:    "correct delete",
 			backend: BackendTest,
 			uid:     "okTest",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return k.GetAddress()
 			},
 			expectedErr: nil,
@@ -1645,7 +1644,7 @@ func TestAltKeyring_DeleteByAddress(t *testing.T) {
 			name:    "not found",
 			backend: BackendTest,
 			uid:     "notFoundUid",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return nil, nil
 			},
 			expectedErr: sdkerrors.ErrKeyNotFound,
@@ -1654,7 +1653,7 @@ func TestAltKeyring_DeleteByAddress(t *testing.T) {
 			name:    "in memory correct delete",
 			backend: BackendMemory,
 			uid:     "inMemory",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return k.GetAddress()
 			},
 			expectedErr: nil,
@@ -1663,7 +1662,7 @@ func TestAltKeyring_DeleteByAddress(t *testing.T) {
 			name:    "in memory not found",
 			backend: BackendMemory,
 			uid:     "inMemoryNotFoundUid",
-			getAddress: func(k *Record) (sdk.AccAddress, error) {
+			getAddres: func(k *Record) (sdk.AccAddress, error) {
 				return nil, nil
 			},
 			expectedErr: sdkerrors.ErrKeyNotFound,
@@ -1676,7 +1675,7 @@ func TestAltKeyring_DeleteByAddress(t *testing.T) {
 
 			mnemonic, _, err := kr.NewMnemonic(tt.uid, English, sdk.FullFundraiserPath, DefaultBIP39Passphrase, hd.Secp256k1)
 			require.NoError(t, err)
-			addr, err := tt.getAddress(mnemonic)
+			addr, err := tt.getAddres(mnemonic)
 			require.NoError(t, err)
 
 			err = kr.DeleteByAddress(addr)
@@ -1973,14 +1972,14 @@ func TestRenameKey(t *testing.T) {
 			},
 		},
 		{
-			name: "can't rename a key that doesn't exist",
+			name: "cant rename a key that doesnt exist",
 			run: func(kr Keyring) {
 				err := kr.Rename("bogus", "bogus2")
 				require.Error(t, err)
 			},
 		},
 		{
-			name: "can't rename a key to an already existing key name",
+			name: "cant rename a key to an already existing key name",
 			run: func(kr Keyring) {
 				key1, key2 := "existingKey", "existingKey2" // create 2 keys
 				newKeyRecord(t, kr, key1)
@@ -1991,7 +1990,7 @@ func TestRenameKey(t *testing.T) {
 			},
 		},
 		{
-			name: "can't rename key to itself",
+			name: "cant rename key to itself",
 			run: func(kr Keyring) {
 				keyName := "keyName"
 				newKeyRecord(t, kr, keyName)
@@ -2003,7 +2002,7 @@ func TestRenameKey(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
+		tc := tc
 		kr := newKeyring(t, "testKeyring")
 		t.Run(tc.name, func(t *testing.T) {
 			tc.run(kr)
@@ -2013,7 +2012,7 @@ func TestRenameKey(t *testing.T) {
 
 // TestChangeBcrypt tests the compatibility from upstream Bcrypt and our own
 func TestChangeBcrypt(t *testing.T) {
-	pw := []byte("somepassword!")
+	pw := []byte("somepasswword!")
 
 	saltBytes := cmtcrypto.CRandBytes(16)
 	cosmosHash, err := cosmosbcrypt.GenerateFromPassword(saltBytes, pw, 2)
@@ -2038,8 +2037,6 @@ func TestChangeBcrypt(t *testing.T) {
 }
 
 func requireEqualRenamedKey(t *testing.T, key, mnemonic *Record, nameMatch bool) {
-	t.Helper()
-
 	if nameMatch {
 		require.Equal(t, key.Name, mnemonic.Name)
 	}
@@ -2058,8 +2055,6 @@ func requireEqualRenamedKey(t *testing.T, key, mnemonic *Record, nameMatch bool)
 }
 
 func newKeyring(t *testing.T, name string) Keyring {
-	t.Helper()
-
 	cdc := getCodec()
 	kr, err := New(name, "test", t.TempDir(), nil, cdc)
 	require.NoError(t, err)
@@ -2067,16 +2062,12 @@ func newKeyring(t *testing.T, name string) Keyring {
 }
 
 func newKeyRecord(t *testing.T, kr Keyring, name string) *Record {
-	t.Helper()
-
 	k, _, err := kr.NewMnemonic(name, English, sdk.FullFundraiserPath, DefaultBIP39Passphrase, hd.Secp256k1)
 	require.NoError(t, err)
 	return k
 }
 
 func assertKeysExist(t *testing.T, kr Keyring, names ...string) {
-	t.Helper()
-
 	for _, n := range names {
 		_, err := kr.Key(n)
 		require.NoError(t, err)

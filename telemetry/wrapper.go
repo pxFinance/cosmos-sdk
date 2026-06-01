@@ -8,18 +8,19 @@ import (
 
 // Common metric key constants
 const (
-	MetricKeyPreBlocker   = "pre_blocker"
-	MetricKeyBeginBlocker = "begin_blocker"
-	MetricKeyEndBlocker   = "end_blocker"
-	MetricLabelNameModule = "module"
+	MetricKeyBeginBlocker       = "begin_blocker"
+	MetricKeyEndBlocker         = "end_blocker"
+	MetricKeyPrepareCheckStater = "prepare_check_stater"
+	MetricKeyPrecommiter        = "precommiter"
+	MetricLabelNameModule       = "module"
 )
 
-// Deprecated: NewLabel creates a new instance of Label with name and value
+// NewLabel creates a new instance of Label with name and value
 func NewLabel(name, value string) metrics.Label {
 	return metrics.Label{Name: name, Value: value}
 }
 
-// Deprecated: ModuleMeasureSince provides a short hand method for emitting a time measure
+// ModuleMeasureSince provides a short hand method for emitting a time measure
 // metric for a module with a given set of keys. If any global labels are defined,
 // they will be added to the module label.
 func ModuleMeasureSince(module string, start time.Time, keys ...string) {
@@ -34,7 +35,7 @@ func ModuleMeasureSince(module string, start time.Time, keys ...string) {
 	)
 }
 
-// Deprecated: ModuleSetGauge provides a short hand method for emitting a gauge metric for a
+// ModuleSetGauge provides a short hand method for emitting a gauge metric for a
 // module with a given set of keys. If any global labels are defined, they will
 // be added to the module label.
 func ModuleSetGauge(module string, val float32, keys ...string) {
@@ -49,7 +50,7 @@ func ModuleSetGauge(module string, val float32, keys ...string) {
 	)
 }
 
-// Deprecated: IncrCounter provides a wrapper functionality for emitting a counter metric with
+// IncrCounter provides a wrapper functionality for emitting a counter metric with
 // global labels (if any).
 func IncrCounter(val float32, keys ...string) {
 	if !IsTelemetryEnabled() {
@@ -59,7 +60,7 @@ func IncrCounter(val float32, keys ...string) {
 	metrics.IncrCounterWithLabels(keys, val, globalLabels)
 }
 
-// Deprecated: IncrCounterWithLabels provides a wrapper functionality for emitting a counter
+// IncrCounterWithLabels provides a wrapper functionality for emitting a counter
 // metric with global labels (if any) along with the provided labels.
 func IncrCounterWithLabels(keys []string, val float32, labels []metrics.Label) {
 	if !IsTelemetryEnabled() {
@@ -69,7 +70,7 @@ func IncrCounterWithLabels(keys []string, val float32, labels []metrics.Label) {
 	metrics.IncrCounterWithLabels(keys, val, append(labels, globalLabels...))
 }
 
-// Deprecated: SetGauge provides a wrapper functionality for emitting a gauge metric with
+// SetGauge provides a wrapper functionality for emitting a gauge metric with
 // global labels (if any).
 func SetGauge(val float32, keys ...string) {
 	if !IsTelemetryEnabled() {
@@ -79,7 +80,7 @@ func SetGauge(val float32, keys ...string) {
 	metrics.SetGaugeWithLabels(keys, val, globalLabels)
 }
 
-// Deprecated: SetGaugeWithLabels provides a wrapper functionality for emitting a gauge
+// SetGaugeWithLabels provides a wrapper functionality for emitting a gauge
 // metric with global labels (if any) along with the provided labels.
 func SetGaugeWithLabels(keys []string, val float32, labels []metrics.Label) {
 	if !IsTelemetryEnabled() {
@@ -89,7 +90,7 @@ func SetGaugeWithLabels(keys []string, val float32, labels []metrics.Label) {
 	metrics.SetGaugeWithLabels(keys, val, append(labels, globalLabels...))
 }
 
-// Deprecated: MeasureSince provides a wrapper functionality for emitting a time measure
+// MeasureSince provides a wrapper functionality for emitting a a time measure
 // metric with global labels (if any).
 func MeasureSince(start time.Time, keys ...string) {
 	if !IsTelemetryEnabled() {
@@ -99,7 +100,7 @@ func MeasureSince(start time.Time, keys ...string) {
 	metrics.MeasureSinceWithLabels(keys, start.UTC(), globalLabels)
 }
 
-// Deprecated: Now return the current time if telemetry is enabled or a zero time if it's not
+// Now return the current time if telemetry is enabled or a zero time if it's not
 func Now() time.Time {
 	if !IsTelemetryEnabled() {
 		return time.Time{}

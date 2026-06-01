@@ -1,6 +1,8 @@
 package simulation
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/rand"
 
 	sdkmath "cosmossdk.io/math"
@@ -25,7 +27,6 @@ func RandomGenesisSendEnabled(r *rand.Rand, bondDenom string) []types.SendEnable
 		bondEnabled := r.Int63n(100) < 75
 		rv = append(rv, types.SendEnabled{Denom: bondDenom, Enabled: bondEnabled})
 	}
-
 	// Probabilities:
 	//   P(a)    = 60.0% = There's SendEnable entry for the bond denom = .600
 	//   P(a)'   = 40.0% = There is NOT a SendEnable entry for the bond denom  = 1 - P(a) = 1 - .600 = .400
@@ -48,7 +49,7 @@ func RandomGenesisSendEnabled(r *rand.Rand, bondDenom string) []types.SendEnable
 	//   P(sef)  = 18.0% = SendEnabled entry that does not equal the default   = P(stc') + P(sfc) = .045 + .135 = .180
 	//
 	//   P(t)    = 81.0% = Bond denom is sendable      = P(a'c) + P(st)  = .360 + .450 = .810
-	//   P(f)    = 19.0% = Bond denom is NOT sendable  = P(a'c') + P(sf) = .040 + .150 = .190
+	//   P(f)    = 19.0% = Bond demon is NOT sendable  = P(a'c') + P(sf) = .040 + .150 = .190
 
 	return rv
 }
@@ -70,17 +71,26 @@ func RandomGenesisBalances(simState *module.SimulationState) []types.Balance {
 
 // RandomizedGenState generates a random GenesisState for bank
 func RandomizedGenState(simState *module.SimulationState) {
+	var defaultSendEnabledParam bool
+	simState.AppParams.GetOrGenerate(string(types.KeyDefaultSendEnabled), &defaultSendEnabledParam, simState.Rand, func(r *rand.Rand) { defaultSendEnabledParam = RandomGenesisDefaultSendEnabledParam(r) })
+
 	sendEnabled := RandomGenesisSendEnabled(simState.Rand, simState.BondDenom)
 
 	numAccs := int64(len(simState.Accounts))
-	totalSupply := simState.InitialStake.Mul(sdkmath.NewInt(numAccs + simState.NumBonded))
+	totalSupply := simState.InitialStake.Mul(sdkmath.NewInt((numAccs + simState.NumBonded)))
 	supply := sdk.NewCoins(sdk.NewCoin(simState.BondDenom, totalSupply))
 
 	bankGenesis := types.GenesisState{
-		Params:      types.NewParams(true),
+		Params:      types.NewParams(defaultSendEnabledParam),
 		Balances:    RandomGenesisBalances(simState),
 		Supply:      supply,
 		SendEnabled: sendEnabled,
 	}
+
+	paramsBytes, err := json.MarshalIndent(&bankGenesis.Params, "", " ")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Selected randomly generated bank parameters:\n%s\n", paramsBytes)
 	simState.GenState[types.ModuleName] = simState.Cdc.MustMarshalJSON(&bankGenesis)
 }

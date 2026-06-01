@@ -6,6 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	txsigning "cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/tx/signing/aminojson"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -15,8 +18,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson"
 )
 
 var (
@@ -31,8 +32,6 @@ var (
 )
 
 func buildTx(t *testing.T, bldr *wrapper) {
-	t.Helper()
-
 	bldr.SetFeeAmount(coins)
 	bldr.SetGasLimit(gas)
 	bldr.SetMemo(memo)
@@ -55,37 +54,34 @@ func TestLegacyAminoJSONHandler_GetSignBytes(t *testing.T) {
 		expectedSignBz []byte
 	}{
 		{
-			name:           "signer which is also fee payer (no tips)",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) {},
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas}, []sdk.Msg{msg}, memo), //nolint:staticcheck // needed for legacy testing
+			"signer which is also fee payer (no tips)", addr1.String(),
+			func(w *wrapper) {},
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas}, []sdk.Msg{msg}, memo),
 		},
 
 		{
-			name:           "explicit fee payer",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) { w.SetFeePayer(addr2) },
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String()}, []sdk.Msg{msg}, memo), //nolint:staticcheck // needed for legacy testing
+			"explicit fee payer", addr1.String(),
+			func(w *wrapper) { w.SetFeePayer(addr2) },
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 		{
-			name:           "explicit fee granter",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) { w.SetFeeGranter(addr2) },
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Granter: addr2.String()}, []sdk.Msg{msg}, memo), //nolint:staticcheck // needed for legacy testing
+			"explicit fee granter", addr1.String(),
+			func(w *wrapper) { w.SetFeeGranter(addr2) },
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Granter: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 		{
-			name:   "explicit fee payer and fee granter",
-			signer: addr1.String(),
-			malleate: func(w *wrapper) {
+			"explicit fee payer and fee granter", addr1.String(),
+			func(w *wrapper) {
 				w.SetFeePayer(addr2)
 				w.SetFeeGranter(addr2)
 			},
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String(), Granter: addr2.String()}, []sdk.Msg{msg}, memo), //nolint:staticcheck // needed for legacy testing
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String(), Granter: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 	}
 
 	handler := signModeLegacyAminoJSONHandler{}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			bldr := newBuilder(nil)
 			buildTx(t, bldr)
@@ -159,37 +155,34 @@ func TestLegacyAminoJSONHandler_AllGetSignBytesComparison(t *testing.T) {
 		expectedSignBz []byte
 	}{
 		{
-			name:           "signer which is also fee payer (no tips)",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) {},
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas}, []sdk.Msg{msg}, memo), // nolint:staticcheck // maintain for legacy testing
+			"signer which is also fee payer (no tips)", addr1.String(),
+			func(w *wrapper) {},
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas}, []sdk.Msg{msg}, memo),
 		},
 
 		{
-			name:           "explicit fee payer",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) { w.SetFeePayer(addr2) },
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String()}, []sdk.Msg{msg}, memo), // nolint:staticcheck // maintain for legacy testing
+			"explicit fee payer", addr1.String(),
+			func(w *wrapper) { w.SetFeePayer(addr2) },
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 		{
-			name:           "explicit fee granter",
-			signer:         addr1.String(),
-			malleate:       func(w *wrapper) { w.SetFeeGranter(addr2) },
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Granter: addr2.String()}, []sdk.Msg{msg}, memo), // nolint:staticcheck // maintain for legacy testing
+			"explicit fee granter", addr1.String(),
+			func(w *wrapper) { w.SetFeeGranter(addr2) },
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Granter: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 		{
-			name:   "explicit fee payer and fee granter",
-			signer: addr1.String(),
-			malleate: func(w *wrapper) {
+			"explicit fee payer and fee granter", addr1.String(),
+			func(w *wrapper) {
 				w.SetFeePayer(addr2)
 				w.SetFeeGranter(addr2)
 			},
-			expectedSignBz: legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String(), Granter: addr2.String()}, []sdk.Msg{msg}, memo), // nolint:staticcheck // maintain for legacy testing
+			legacytx.StdSignBytes(chainID, accNum, seqNum, timeout, legacytx.StdFee{Amount: coins, Gas: gas, Payer: addr2.String(), Granter: addr2.String()}, []sdk.Msg{msg}, memo),
 		},
 	}
 
 	handler := signModeLegacyAminoJSONHandler{}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			bldr := newBuilder(nil)
 			buildTx(t, bldr)

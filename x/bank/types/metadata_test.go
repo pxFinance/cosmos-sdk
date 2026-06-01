@@ -26,8 +26,9 @@ func TestMetadataValidate(t *testing.T) {
 					{"matom", uint32(3), []string{"milliatom"}},
 					{"atom", uint32(6), nil},
 				},
-				Base:    "uatom",
-				Display: "atom",
+				Base:     "uatom",
+				Display:  "atom",
+				Decimals: 6,
 			},
 			false,
 		},
@@ -147,8 +148,9 @@ func TestMetadataValidate(t *testing.T) {
 					{"matom", uint32(3), []string{"milliatom"}},
 					{"atom", uint32(6), nil},
 				},
-				Base:    "uatom",
-				Display: "atom",
+				Base:     "uatom",
+				Display:  "atom",
+				Decimals: 6,
 			},
 			true,
 		},
@@ -163,8 +165,9 @@ func TestMetadataValidate(t *testing.T) {
 					{"matom", uint32(3), []string{"milliatom"}},
 					{"atom", uint32(6), nil},
 				},
-				Base:    "uatom",
-				Display: "atom",
+				Base:     "uatom",
+				Display:  "atom",
+				Decimals: 6,
 			},
 			true,
 		},
@@ -216,6 +219,7 @@ func TestMetadataValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.metadata.Validate()
 
@@ -257,6 +261,7 @@ func TestMarshalJSONMetaData(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			bz, err := cdc.MarshalJSON(tc.input)
 			require.NoError(t, err)

@@ -2,24 +2,33 @@ package baseapp
 
 import (
 	"fmt"
+	"io"
 	"math"
 
+	"github.com/pxFinance/metrics/v2"
 	dbm "github.com/cosmos/cosmos-db"
 
+	sdkmetrics "cosmossdk.io/store/metrics"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/snapshots"
+	snapshottypes "cosmossdk.io/store/snapshots/types"
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/baseapp/oe"
-	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/snapshots"
-	snapshottypes "github.com/cosmos/cosmos-sdk/store/v2/snapshots/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/mempool"
 )
 
 // File for storing in-package BaseApp optional functions,
 // for options that need access to non-exported fields of the BaseApp
+
+func SetIAVLSyncPruning(sync bool) func(app *BaseApp) {
+	return func(bapp *BaseApp) {
+		bapp.cms.SetIAVLSyncPruning(sync)
+	}
+}
 
 // SetPruning sets a pruning option on the multistore associated with the app
 func SetPruning(opts pruningtypes.PruningOptions) func(*BaseApp) {
@@ -42,7 +51,7 @@ func SetQueryGasLimit(queryGasLimit uint64) func(*BaseApp) {
 		queryGasLimit = math.MaxUint64
 	}
 
-	return func(bapp *BaseApp) { bapp.gasConfig.QueryGasLimit = queryGasLimit }
+	return func(bapp *BaseApp) { bapp.queryGasLimit = queryGasLimit }
 }
 
 // SetHaltHeight returns a BaseApp option function that sets the halt block height.
@@ -82,13 +91,6 @@ func SetIAVLDisableFastNode(disable bool) func(*BaseApp) {
 	return func(bapp *BaseApp) { bapp.cms.SetIAVLDisableFastNode(disable) }
 }
 
-// SetIAVLSyncPruning set sync/async pruning in the IAVL store. Developers should rarely use this.
-// This option was added to allow the `Prune` command to force synchronous pruning, which is needed to allow the
-// command to wait before returning.
-func SetIAVLSyncPruning(syncPruning bool) func(*BaseApp) {
-	return func(bapp *BaseApp) { bapp.cms.SetIAVLSyncPruning(syncPruning) }
-}
-
 // SetInterBlockCache provides a BaseApp option function that sets the
 // inter-block cache.
 func SetInterBlockCache(cache storetypes.MultiStorePersistentCache) func(*BaseApp) {
@@ -122,18 +124,9 @@ func SetOptimisticExecution(opts ...func(*oe.OptimisticExecution)) func(*BaseApp
 	}
 }
 
-// SetBlockSTMTxRunner sets the block stm tx runner for the BaseApp for parallel execution.
-func (app *BaseApp) SetBlockSTMTxRunner(txRunner sdk.TxRunner) {
-	if _, ok := txRunner.(*txnrunner.STMRunner); ok && !app.disableBlockGasMeter {
-		// This combination results in indeterminism
-		panic("Cannot configure parallel execution while block gas meter is enabled")
-	}
-	app.txRunner = txRunner
-}
-
-// EnableBlockGasMeter enables the block gas meter.
-func EnableBlockGasMeter() func(*BaseApp) {
-	return func(app *BaseApp) { app.SetDisableBlockGasMeter(false) }
+// DisableBlockGasMeter disables the block gas meter.
+func DisableBlockGasMeter() func(*BaseApp) {
+	return func(app *BaseApp) { app.SetDisableBlockGasMeter(true) }
 }
 
 func (app *BaseApp) SetName(name string) {
@@ -176,7 +169,7 @@ func (app *BaseApp) SetDB(db dbm.DB) {
 
 func (app *BaseApp) SetCMS(cms storetypes.CommitMultiStore) {
 	if app.sealed {
-		panic("SetCMS() on sealed BaseApp")
+		panic("SetEndBlocker() on sealed BaseApp")
 	}
 
 	app.cms = cms
@@ -187,11 +180,11 @@ func (app *BaseApp) SetInitChainer(initChainer sdk.InitChainer) {
 		panic("SetInitChainer() on sealed BaseApp")
 	}
 
-	app.abciHandlers.InitChainer = initChainer
+	app.initChainer = initChainer
 }
 
 func (app *BaseApp) PreBlocker() sdk.PreBlocker {
-	return app.abciHandlers.PreBlocker
+	return app.preBlocker
 }
 
 func (app *BaseApp) SetPreBlocker(preBlocker sdk.PreBlocker) {
@@ -199,7 +192,7 @@ func (app *BaseApp) SetPreBlocker(preBlocker sdk.PreBlocker) {
 		panic("SetPreBlocker() on sealed BaseApp")
 	}
 
-	app.abciHandlers.PreBlocker = preBlocker
+	app.preBlocker = preBlocker
 }
 
 func (app *BaseApp) SetBeginBlocker(beginBlocker sdk.BeginBlocker) {
@@ -207,7 +200,7 @@ func (app *BaseApp) SetBeginBlocker(beginBlocker sdk.BeginBlocker) {
 		panic("SetBeginBlocker() on sealed BaseApp")
 	}
 
-	app.abciHandlers.BeginBlocker = beginBlocker
+	app.beginBlocker = beginBlocker
 }
 
 func (app *BaseApp) SetEndBlocker(endBlocker sdk.EndBlocker) {
@@ -215,7 +208,7 @@ func (app *BaseApp) SetEndBlocker(endBlocker sdk.EndBlocker) {
 		panic("SetEndBlocker() on sealed BaseApp")
 	}
 
-	app.abciHandlers.EndBlocker = endBlocker
+	app.endBlocker = endBlocker
 }
 
 func (app *BaseApp) SetPrepareCheckStater(prepareCheckStater sdk.PrepareCheckStater) {
@@ -223,7 +216,7 @@ func (app *BaseApp) SetPrepareCheckStater(prepareCheckStater sdk.PrepareCheckSta
 		panic("SetPrepareCheckStater() on sealed BaseApp")
 	}
 
-	app.abciHandlers.PrepareCheckStater = prepareCheckStater
+	app.prepareCheckStater = prepareCheckStater
 }
 
 func (app *BaseApp) SetPrecommiter(precommiter sdk.Precommiter) {
@@ -231,7 +224,7 @@ func (app *BaseApp) SetPrecommiter(precommiter sdk.Precommiter) {
 		panic("SetPrecommiter() on sealed BaseApp")
 	}
 
-	app.abciHandlers.Precommiter = precommiter
+	app.precommiter = precommiter
 }
 
 func (app *BaseApp) SetAnteHandler(ah sdk.AnteHandler) {
@@ -274,9 +267,15 @@ func (app *BaseApp) SetFauxMerkleMode() {
 	app.fauxMerkleMode = true
 }
 
-// SetNotSigverifyTx during simulation testing, transaction signature verification needs to be ignored.
+// SetNotSigverify during simulation testing, transaction signature verification needs to be ignored.
 func (app *BaseApp) SetNotSigverifyTx() {
 	app.sigverifyTx = false
+}
+
+// SetCommitMultiStoreTracer sets the store tracer on the BaseApp's underlying
+// CommitMultiStore.
+func (app *BaseApp) SetCommitMultiStoreTracer(w io.Writer) {
+	app.cms.SetTracer(w)
 }
 
 // SetStoreLoader allows us to customize the rootMultiStore initialization.
@@ -322,7 +321,7 @@ func (app *BaseApp) SetTxEncoder(txEncoder sdk.TxEncoder) {
 // SetQueryMultiStore set a alternative MultiStore implementation to support grpc query service.
 //
 // Ref: https://github.com/cosmos/cosmos-sdk/issues/13317
-func (app *BaseApp) SetQueryMultiStore(ms storetypes.MultiStore) {
+func (app *BaseApp) SetQueryMultiStore(ms storetypes.RootMultiStore) {
 	app.qms = ms
 }
 
@@ -339,7 +338,7 @@ func (app *BaseApp) SetProcessProposal(handler sdk.ProcessProposalHandler) {
 	if app.sealed {
 		panic("SetProcessProposal() on sealed BaseApp")
 	}
-	app.abciHandlers.ProcessProposalHandler = handler
+	app.processProposal = handler
 }
 
 // SetPrepareProposal sets the prepare proposal function for the BaseApp.
@@ -348,34 +347,16 @@ func (app *BaseApp) SetPrepareProposal(handler sdk.PrepareProposalHandler) {
 		panic("SetPrepareProposal() on sealed BaseApp")
 	}
 
-	app.abciHandlers.PrepareProposalHandler = handler
+	app.prepareProposal = handler
 }
 
-// SetCheckTxHandler sets the checkTx function for the BaseApp.
+// SetCheckTx sets the checkTx function for the BaseApp.
 func (app *BaseApp) SetCheckTxHandler(handler sdk.CheckTxHandler) {
 	if app.sealed {
-		panic("SetCheckTxHandler() on sealed BaseApp")
+		panic("SetCheckTx() on sealed BaseApp")
 	}
 
-	app.abciHandlers.CheckTxHandler = handler
-}
-
-// SetInsertTxHandler sets the InsertTx function for the BaseApp.
-func (app *BaseApp) SetInsertTxHandler(handler sdk.InsertTxHandler) {
-	if app.sealed {
-		panic("SetInsertTxHandler() on sealed BaseApp")
-	}
-
-	app.abciHandlers.InsertTxHandler = handler
-}
-
-// SetReapTxsHandler sets the ReapTxs function for the BaseApp.
-func (app *BaseApp) SetReapTxsHandler(handler sdk.ReapTxsHandler) {
-	if app.sealed {
-		panic("SetReapTxsHandler() on sealed BaseApp")
-	}
-
-	app.abciHandlers.ReapTxsHandler = handler
+	app.checkTxHandler = handler
 }
 
 func (app *BaseApp) SetExtendVoteHandler(handler sdk.ExtendVoteHandler) {
@@ -383,7 +364,7 @@ func (app *BaseApp) SetExtendVoteHandler(handler sdk.ExtendVoteHandler) {
 		panic("SetExtendVoteHandler() on sealed BaseApp")
 	}
 
-	app.abciHandlers.ExtendVoteHandler = handler
+	app.extendVote = handler
 }
 
 func (app *BaseApp) SetVerifyVoteExtensionHandler(handler sdk.VerifyVoteExtensionHandler) {
@@ -391,7 +372,16 @@ func (app *BaseApp) SetVerifyVoteExtensionHandler(handler sdk.VerifyVoteExtensio
 		panic("SetVerifyVoteExtensionHandler() on sealed BaseApp")
 	}
 
-	app.abciHandlers.VerifyVoteExtensionHandler = handler
+	app.verifyVoteExt = handler
+}
+
+// SetStoreMetrics sets the prepare proposal function for the BaseApp.
+func (app *BaseApp) SetStoreMetrics(gatherer sdkmetrics.StoreMetrics) {
+	if app.sealed {
+		panic("SetStoreMetrics() on sealed BaseApp")
+	}
+
+	app.cms.SetMetrics(gatherer)
 }
 
 // SetStreamingManager sets the streaming manager for the BaseApp.
@@ -401,10 +391,6 @@ func (app *BaseApp) SetStreamingManager(manager storetypes.StreamingManager) {
 
 // SetDisableBlockGasMeter sets the disableBlockGasMeter flag for the BaseApp.
 func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
-	if _, ok := app.txRunner.(*txnrunner.STMRunner); ok && !disableBlockGasMeter {
-		// This combination results in indeterminism
-		panic("Cannot enable block gas meter while parallel execution is configured")
-	}
 	app.disableBlockGasMeter = disableBlockGasMeter
 }
 
@@ -416,4 +402,35 @@ func (app *BaseApp) SetMsgServiceRouter(msgServiceRouter *MsgServiceRouter) {
 // SetGRPCQueryRouter sets the GRPCQueryRouter of the BaseApp.
 func (app *BaseApp) SetGRPCQueryRouter(grpcQueryRouter *GRPCQueryRouter) {
 	app.grpcQueryRouter = grpcQueryRouter
+}
+
+
+func (app *BaseApp) SetMeter(m metrics.Meter) {
+	app.meter = m
+}
+
+func (app *BaseApp) Meter() metrics.Meter {
+	return app.meter
+}
+
+func SetMeter(m metrics.Meter) func(*BaseApp) {
+	return func(app *BaseApp) { app.meter = m }
+}
+
+// SetTxResultsPostHook is used to set txResultsPostHook.
+// txResultsPostHook can be used to alter TxResults inside block results,
+// For example, to fix EVM transaction logs and put correct tx and msg indexes in them, since
+// we can't do that during execution of individual messages (we do not track indexes throughout block execution,
+// thus can only fix them after block is ready)
+func (app *BaseApp) SetTxResultsPostHook(hookFn TxResultsPostHook) {
+	app.txResultsPostHook = hookFn
+}
+
+// SetTxResultsPostHook is used to set txResultsPostHook.
+// txResultsPostHook can be used to alter TxResults inside block results,
+// For example, to fix EVM transaction logs and put correct tx and msg indexes in them, since
+// we can't do that during execution of individual messages (we do not track indexes throughout block execution,
+// thus can only fix them after block is ready)
+func SetTxResultsPostHook(hookFn TxResultsPostHook) func(*BaseApp) {
+	return func(app *BaseApp) { app.txResultsPostHook = hookFn }
 }

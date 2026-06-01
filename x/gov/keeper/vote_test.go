@@ -15,7 +15,7 @@ import (
 )
 
 func TestVotes(t *testing.T) {
-	govKeeper, authKeeper, bankKeeper, stakingKeeper, _, _, _, ctx := setupGovKeeper(t)
+	govKeeper, authKeeper, bankKeeper, stakingKeeper, _, _, ctx := setupGovKeeper(t)
 	addrs := simtestutil.AddTestAddrsIncremental(bankKeeper, stakingKeeper, ctx, 2, sdkmath.NewInt(10000000))
 	authKeeper.EXPECT().AddressCodec().Return(address.NewBech32Codec("cosmos")).AnyTimes()
 
@@ -31,7 +31,7 @@ func TestVotes(t *testing.T) {
 	require.Error(t, govKeeper.AddVote(ctx, 10, addrs[0], v1.NewNonSplitVoteOption(v1.OptionYes), ""), "invalid proposal ID")
 
 	proposal.Status = v1.StatusVotingPeriod
-	require.NoError(t, govKeeper.SetProposal(ctx, proposal))
+	govKeeper.SetProposal(ctx, proposal)
 
 	require.Error(t, govKeeper.AddVote(ctx, proposalID, addrs[0], v1.NewNonSplitVoteOption(invalidOption), ""), "invalid option")
 

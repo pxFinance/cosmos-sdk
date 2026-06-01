@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 	"gotest.tools/v3/assert"
 
 	"cosmossdk.io/math"
@@ -19,13 +19,11 @@ import (
 
 // SetupUnbondingTests creates two validators and setup mocked staking hooks for testing unbonding
 func SetupUnbondingTests(t *testing.T, f *fixture, hookCalled *bool, ubdeID *uint64) (bondDenom string, addrDels []sdk.AccAddress, addrVals []sdk.ValAddress) {
-	t.Helper()
-
 	// setup hooks
 	mockCtrl := gomock.NewController(t)
-	mockStakingHooks := testutil.NewMockStakingHooks(mockCtrl)
-	mockStakingHooks.EXPECT().AfterDelegationModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().AfterUnbondingInitiated(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx sdk.Context, id uint64) error {
+	mockStackingHooks := testutil.NewMockStakingHooks(mockCtrl)
+	mockStackingHooks.EXPECT().AfterDelegationModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterUnbondingInitiated(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx sdk.Context, id uint64) error {
 		*hookCalled = true
 		// save id
 		*ubdeID = id
@@ -35,16 +33,16 @@ func SetupUnbondingTests(t *testing.T, f *fixture, hookCalled *bool, ubdeID *uin
 
 		return nil
 	}).AnyTimes()
-	mockStakingHooks.EXPECT().AfterValidatorBeginUnbonding(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().AfterValidatorBonded(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().AfterValidatorCreated(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().AfterValidatorRemoved(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().BeforeDelegationCreated(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().BeforeDelegationRemoved(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().BeforeDelegationSharesModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().BeforeValidatorModified(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	mockStakingHooks.EXPECT().BeforeValidatorSlashed(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	f.stakingKeeper.SetHooks(types.NewMultiStakingHooks(mockStakingHooks))
+	mockStackingHooks.EXPECT().AfterValidatorBeginUnbonding(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterValidatorBonded(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterValidatorCreated(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().AfterValidatorRemoved(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().BeforeDelegationCreated(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().BeforeDelegationRemoved(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().BeforeDelegationSharesModified(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().BeforeValidatorModified(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockStackingHooks.EXPECT().BeforeValidatorSlashed(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	f.stakingKeeper.SetHooks(types.NewMultiStakingHooks(mockStackingHooks))
 
 	addrDels = simtestutil.AddTestAddrsIncremental(f.bankKeeper, f.stakingKeeper, f.sdkCtx, 2, math.NewInt(10000))
 	addrVals = simtestutil.ConvertAddrsToValAddrs(addrDels)
@@ -94,8 +92,6 @@ func doUnbondingDelegation(
 	addrVals []sdk.ValAddress,
 	hookCalled *bool,
 ) (completionTime time.Time, bondedAmt, notBondedAmt math.Int) {
-	t.Helper()
-
 	// UNDELEGATE
 	// Save original bonded and unbonded amounts
 	bondedAmt1 := bankKeeper.GetBalance(ctx, stakingKeeper.GetBondedPool(ctx).GetAddress(), bondDenom).Amount
@@ -133,8 +129,6 @@ func doRedelegation(
 	addrVals []sdk.ValAddress,
 	hookCalled *bool,
 ) (completionTime time.Time) {
-	t.Helper()
-
 	var err error
 	completionTime, err = stakingKeeper.BeginRedelegation(ctx, addrDels[0], addrVals[0], addrVals[1], math.LegacyNewDec(1))
 	assert.NilError(t, err)
@@ -158,8 +152,6 @@ func doValidatorUnbonding(
 	addrVal sdk.ValAddress,
 	hookCalled *bool,
 ) (validator types.Validator) {
-	t.Helper()
-
 	validator, found := stakingKeeper.GetValidator(ctx, addrVal)
 	assert.Assert(t, found)
 	// Check that status is bonded

@@ -22,7 +22,7 @@ func base64Encode(src []byte) []byte {
 
 func base64Decode(src []byte) ([]byte, error) {
 	numOfEquals := 4 - (len(src) % 4)
-	for range numOfEquals {
+	for i := 0; i < numOfEquals; i++ {
 		src = append(src, '=')
 	}
 

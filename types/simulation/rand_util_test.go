@@ -23,6 +23,7 @@ func TestRandSubsetCoins(t *testing.T) {
 		{"seed=99", rand.New(rand.NewSource(99)), mustParseCoins("100stake,2testtoken")},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got := simulation.RandSubsetCoins(tt.r, tt.coins)
 			gotStringRep := got.String()
@@ -45,6 +46,8 @@ func TestRandStringOfLength(t *testing.T) {
 		{"1_000_000-size", 1_000_000, 1_000_000},
 	}
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			got := simulation.RandStringOfLength(r, tt.n)
 			require.Equal(t, tt.want, len(got))

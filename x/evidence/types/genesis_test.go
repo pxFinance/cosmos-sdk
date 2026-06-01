@@ -7,11 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"cosmossdk.io/x/evidence/exported"
+	"cosmossdk.io/x/evidence/types"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
-	"github.com/cosmos/cosmos-sdk/x/evidence/exported"
-	"github.com/cosmos/cosmos-sdk/x/evidence/types"
 )
 
 func TestDefaultGenesisState(t *testing.T) {

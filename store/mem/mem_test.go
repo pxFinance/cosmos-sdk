@@ -5,10 +5,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/mem"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/mem"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/types"
 )
 
 func TestStore(t *testing.T) {
@@ -30,6 +30,9 @@ func TestStore(t *testing.T) {
 
 	cacheWrapper := db.CacheWrap()
 	require.IsType(t, &cachekv.Store{}, cacheWrapper)
+
+	cacheWrappedWithTrace := db.CacheWrapWithTrace(nil, nil)
+	require.IsType(t, &cachekv.Store{}, cacheWrappedWithTrace)
 }
 
 func TestCommit(t *testing.T) {
@@ -43,7 +46,7 @@ func TestCommit(t *testing.T) {
 	require.Equal(t, value, db.Get(key))
 }
 
-func TestStorePruningOptions(t *testing.T) {
+func TestStorePrunningOptions(t *testing.T) {
 	// this is a no-op
 	db := mem.NewStore()
 	require.Equal(t, pruningtypes.NewPruningOptions(pruningtypes.PruningUndefined), db.GetPruning())

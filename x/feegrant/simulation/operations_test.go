@@ -6,12 +6,16 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	"cosmossdk.io/x/feegrant"
+	"cosmossdk.io/x/feegrant/keeper"
+	_ "cosmossdk.io/x/feegrant/module"
+	"cosmossdk.io/x/feegrant/simulation"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -29,12 +33,9 @@ import (
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	_ "github.com/cosmos/cosmos-sdk/x/consensus"
-	"github.com/cosmos/cosmos-sdk/x/feegrant"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/keeper"
-	_ "github.com/cosmos/cosmos-sdk/x/feegrant/module"
-	"github.com/cosmos/cosmos-sdk/x/feegrant/simulation"
 	_ "github.com/cosmos/cosmos-sdk/x/genutil"
 	_ "github.com/cosmos/cosmos-sdk/x/mint"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 )
 
@@ -62,6 +63,7 @@ func (suite *SimTestSuite) SetupTest() {
 				configurator.StakingModule(),
 				configurator.TxModule(),
 				configurator.ConsensusModule(),
+				configurator.ParamsModule(),
 				configurator.GenutilModule(),
 				configurator.FeegrantModule(),
 			),
@@ -77,7 +79,7 @@ func (suite *SimTestSuite) SetupTest() {
 	)
 	suite.Require().NoError(err)
 
-	suite.ctx = suite.app.NewContextLegacy(false, cmtproto.Header{Time: time.Now()})
+	suite.ctx = suite.app.BaseApp.NewContextLegacy(false, cmtproto.Header{Time: time.Now()})
 }
 
 func (suite *SimTestSuite) getTestingAccounts(r *rand.Rand, n int) []simtypes.Account {
@@ -150,7 +152,7 @@ func (suite *SimTestSuite) TestSimulateMsgGrantAllowance() {
 	accounts := suite.getTestingAccounts(r, 3)
 
 	//  new block
-	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: app.LastBlockHeight() + 1})
+	_, err := app.FinalizeBlock(&abci.FinalizeBlockRequest{Height: app.LastBlockHeight() + 1})
 	require.NoError(err)
 
 	// execute operation
@@ -176,8 +178,7 @@ func (suite *SimTestSuite) TestSimulateMsgRevokeAllowance() {
 	accounts := suite.getTestingAccounts(r, 3)
 
 	// begin a new block
-	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: suite.app.LastBlockHeight() + 1, Hash: suite.app.LastCommitID().Hash})
-	suite.Require().NoError(err)
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{Height: suite.app.LastBlockHeight() + 1, Hash: suite.app.LastCommitID().Hash})
 
 	feeAmt := sdk.TokensFromConsensusPower(200000, sdk.DefaultPowerReduction)
 	feeCoins := sdk.NewCoins(sdk.NewCoin("foo", feeAmt))
@@ -185,7 +186,7 @@ func (suite *SimTestSuite) TestSimulateMsgRevokeAllowance() {
 	granter, grantee := accounts[0], accounts[1]
 
 	oneYear := ctx.BlockTime().AddDate(1, 0, 0)
-	err = suite.feegrantKeeper.GrantAllowance(
+	err := suite.feegrantKeeper.GrantAllowance(
 		ctx,
 		granter.Address,
 		grantee.Address,

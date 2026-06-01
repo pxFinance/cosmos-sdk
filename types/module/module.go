@@ -32,32 +32,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
-	"slices"
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
 
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/core/genesis"
 	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
-var tracer = otel.Tracer("cosmos-sdk/types/module")
-
-// AppModuleBasic is the standard form for basic non-dependent elements of an application module.
+// AppModuleBasic is the standard form for basic non-dependant elements of an application module.
 type AppModuleBasic interface {
 	HasName
 	RegisterLegacyAminoCodec(*codec.LegacyAmino)
@@ -203,8 +197,7 @@ type HasABCIGenesis interface {
 
 // AppModule is the form for an application module. Most of
 // its functionality has been moved to extension interfaces.
-//
-// Deprecated: use appmodule.AppModule with a combination of extension interfaces instead.
+// Deprecated: use appmodule.AppModule with a combination of extension interfaes interfaces instead.
 type AppModule interface {
 	appmodule.AppModule
 
@@ -212,11 +205,9 @@ type AppModule interface {
 }
 
 // HasInvariants is the interface for registering invariants.
-//
-// Deprecated: this will be removed in the next Cosmos SDK release.
 type HasInvariants interface {
 	// RegisterInvariants registers module invariants.
-	RegisterInvariants(sdk.InvariantRegistry) // nolint: staticcheck // deprecated interface
+	RegisterInvariants(sdk.InvariantRegistry)
 }
 
 // HasServices is the interface for modules to register services.
@@ -235,7 +226,6 @@ type HasConsensusVersion interface {
 }
 
 // HasABCIEndblock is a released typo of HasABCIEndBlock.
-//
 // Deprecated: use HasABCIEndBlock instead.
 type HasABCIEndblock HasABCIEndBlock
 
@@ -274,9 +264,7 @@ func (GenesisOnlyAppModule) IsOnePerModuleType() {}
 // IsAppModule implements the appmodule.AppModule interface.
 func (GenesisOnlyAppModule) IsAppModule() {}
 
-// RegisterInvariants is a placeholder function that registers no invariants
-//
-// Deprecated: this function will be removed when x/crisis and invariants are removed from the cosmos SDK.
+// RegisterInvariants is a placeholder function register no invariants
 func (GenesisOnlyAppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
@@ -285,7 +273,7 @@ func (gam GenesisOnlyAppModule) ConsensusVersion() uint64 { return 1 }
 // Manager defines a module manager that provides the high level utility for managing and executing
 // operations for a group of modules
 type Manager struct {
-	Modules                  map[string]any // interface{} is used now to support the legacy AppModule as well as new core appmodule.AppModule.
+	Modules                  map[string]interface{} // interface{} is used now to support the legacy AppModule as well as new core appmodule.AppModule.
 	OrderInitGenesis         []string
 	OrderExportGenesis       []string
 	OrderPreBlockers         []string
@@ -298,7 +286,7 @@ type Manager struct {
 
 // NewManager creates a new Manager object.
 func NewManager(modules ...AppModule) *Manager {
-	moduleMap := make(map[string]any)
+	moduleMap := make(map[string]interface{})
 	modulesStr := make([]string, 0, len(modules))
 	preBlockModulesStr := make([]string, 0)
 	for _, module := range modules {
@@ -328,7 +316,7 @@ func NewManager(modules ...AppModule) *Manager {
 // NewManagerFromMap creates a new Manager object from a map of module names to module implementations.
 // This method should be used for apps and modules which have migrated to the cosmossdk.io/core.appmodule.AppModule API.
 func NewManagerFromMap(moduleMap map[string]appmodule.AppModule) *Manager {
-	simpleModuleMap := make(map[string]any)
+	simpleModuleMap := make(map[string]interface{})
 	modulesStr := make([]string, 0, len(simpleModuleMap))
 	preBlockModulesStr := make([]string, 0)
 	for name, module := range moduleMap {
@@ -457,9 +445,13 @@ func (m *Manager) SetOrderMigrations(moduleNames ...string) {
 }
 
 // RegisterInvariants registers all module invariants
-//
-// Deprecated: this function is a no-op and will be removed in the next release of the Cosmos SDK.
-func (m *Manager) RegisterInvariants(_ sdk.InvariantRegistry) {}
+func (m *Manager) RegisterInvariants(ir sdk.InvariantRegistry) {
+	for _, module := range m.Modules {
+		if module, ok := module.(HasInvariants); ok {
+			module.RegisterInvariants(ir)
+		}
+	}
+}
 
 // RegisterServices registers all module services
 func (m *Manager) RegisterServices(cfg Configurator) error {
@@ -486,7 +478,7 @@ func (m *Manager) RegisterServices(cfg Configurator) error {
 // InitGenesis performs init genesis functionality for modules. Exactly one
 // module must return a non-empty validator set update to correctly initialize
 // the chain.
-func (m *Manager) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, genesisData map[string]json.RawMessage) (*abci.ResponseInitChain, error) {
+func (m *Manager) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, genesisData map[string]json.RawMessage) (*abci.InitChainResponse, error) {
 	var validatorUpdates []abci.ValidatorUpdate
 	ctx.Logger().Info("initializing blockchain state from genesis.json")
 	for _, moduleName := range m.OrderInitGenesis {
@@ -501,12 +493,12 @@ func (m *Manager) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, genesisData 
 			// core API genesis
 			source, err := genesis.SourceFromRawJSON(genesisData[moduleName])
 			if err != nil {
-				return &abci.ResponseInitChain{}, err
+				return &abci.InitChainResponse{}, err
 			}
 
 			err = module.InitGenesis(ctx, source)
 			if err != nil {
-				return &abci.ResponseInitChain{}, err
+				return &abci.InitChainResponse{}, err
 			}
 		} else if module, ok := mod.(HasGenesis); ok {
 			ctx.Logger().Debug("running initialization for module", "module", moduleName)
@@ -519,7 +511,7 @@ func (m *Manager) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, genesisData 
 			// only one module will update the validator set
 			if len(moduleValUpdates) > 0 {
 				if len(validatorUpdates) > 0 {
-					return &abci.ResponseInitChain{}, errors.New("validator InitGenesis updates already set by a previous module")
+					return &abci.InitChainResponse{}, errors.New("validator InitGenesis updates already set by a previous module")
 				}
 				validatorUpdates = moduleValUpdates
 			}
@@ -528,10 +520,10 @@ func (m *Manager) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, genesisData 
 
 	// a chain must initialize with a non-empty validator set
 	if len(validatorUpdates) == 0 {
-		return &abci.ResponseInitChain{}, fmt.Errorf("validator set is empty after InitGenesis, please ensure at least one validator is initialized with a delegation greater than or equal to the DefaultPowerReduction (%d)", sdk.DefaultPowerReduction)
+		return &abci.InitChainResponse{}, fmt.Errorf("validator set is empty after InitGenesis, please ensure at least one validator is initialized with a delegation greater than or equal to the DefaultPowerReduction (%d)", sdk.DefaultPowerReduction)
 	}
 
-	return &abci.ResponseInitChain{
+	return &abci.InitChainResponse{
 		Validators: validatorUpdates,
 	}, nil
 }
@@ -546,7 +538,7 @@ func (m *Manager) ExportGenesisForModules(ctx sdk.Context, cdc codec.JSONCodec, 
 	if len(modulesToExport) == 0 {
 		modulesToExport = m.OrderExportGenesis
 	}
-	// verify modules exist in app, so that we don't panic in the middle of an export
+	// verify modules exists in app, so that we don't panic in the middle of an export
 	if err := m.checkModulesExists(modulesToExport); err != nil {
 		return nil, err
 	}
@@ -628,6 +620,7 @@ func (m *Manager) assertNoForgottenModules(setOrderFnName string, moduleNames []
 	}
 	var missing []string
 	for m := range m.Modules {
+		m := m
 		if pass != nil && pass(m) {
 			continue
 		}
@@ -650,7 +643,7 @@ type MigrationHandler func(sdk.Context) error
 type VersionMap map[string]uint64
 
 // RunMigrations performs in-place store migrations for all modules. This
-// function MUST be called inside an x/upgrade UpgradeHandler.
+// function MUST be called insde an x/upgrade UpgradeHandler.
 //
 // Recall that in an upgrade handler, the `fromVM` VersionMap is retrieved from
 // x/upgrade's store, and the function needs to return the target VersionMap
@@ -665,8 +658,8 @@ type VersionMap map[string]uint64
 //	})
 //
 // Internally, RunMigrations will perform the following steps:
-// - create an `updatedVM` VersionMap of modules with their latest ConsensusVersion
-// - make a diff of `fromVM` and `updatedVM`, and for each module:
+// - create an `updatedVM` VersionMap of module with their latest ConsensusVersion
+// - make a diff of `fromVM` and `udpatedVM`, and for each module:
 //   - if the module's `fromVM` version is less than its `updatedVM` version,
 //     then run in-place store migrations for that module between those versions.
 //   - if the module does not exist in the `fromVM` (which means that it's a new module,
@@ -681,7 +674,7 @@ type VersionMap map[string]uint64
 // As an app developer, if you wish to skip running InitGenesis for your new
 // module "foo", you need to manually pass a `fromVM` argument to this function
 // foo's module version set to its latest ConsensusVersion. That way, the diff
-// between the function's `fromVM` and `updatedVM` will be empty, hence not
+// between the function's `fromVM` and `udpatedVM` will be empty, hence not
 // running anything for foo.
 //
 // Example:
@@ -729,7 +722,6 @@ func (m Manager) RunMigrations(ctx context.Context, cfg Configurator, fromVM Ver
 		// 2. An existing chain is upgrading from version < 0.43 to v0.43+ for the first time.
 		// In this case, all modules have yet to be added to x/upgrade's VersionMap store.
 		if exists {
-			sdkCtx.Logger().Info(fmt.Sprintf("running migrations for module: %s", moduleName))
 			err := c.runModuleMigrations(sdkCtx, moduleName, fromVersion, toVersion)
 			if err != nil {
 				return nil, err
@@ -755,47 +747,25 @@ func (m Manager) RunMigrations(ctx context.Context, cfg Configurator, fromVM Ver
 	return updatedVM, nil
 }
 
-// PreBlock performs begin block functionality for the upgrade module.
-// It takes the current context as a parameter and returns a ResponsePreBlock
-// indicating whether the consensus parameters were changed during this block.
+// PreBlock performs begin block functionality for upgrade module.
+// It takes the current context as a parameter and returns a boolean value
+// indicating whether the migration was successfully executed or not.
 func (m *Manager) PreBlock(ctx sdk.Context) (*sdk.ResponsePreBlock, error) {
-	// Root span for the whole PreBlock flow.
-	var span trace.Span
-	ctx, span = ctx.StartSpan(tracer, "PreBlock")
-	defer span.End()
-
 	paramsChanged := false
-
 	for _, moduleName := range m.OrderPreBlockers {
-		// Child span per module.
-		var modSpan trace.Span
-		modCtx, modSpan := ctx.StartSpan(tracer, fmt.Sprintf("PreBlock.%s", moduleName))
-
-		module, ok := m.Modules[moduleName].(appmodule.HasPreBlocker)
-		if !ok {
-			// If the module doesn't implement PreBlock, just end the span and continue.
-			modSpan.End()
-			continue
+		if module, ok := m.Modules[moduleName].(appmodule.HasPreBlocker); ok {
+			rsp, err := module.PreBlock(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if rsp.IsConsensusParamsChanged() {
+				paramsChanged = true
+			}
 		}
-
-		rsp, err := module.PreBlock(modCtx)
-		if err != nil {
-			// Record error on the module span.
-			modSpan.RecordError(err)
-			modSpan.SetStatus(codes.Error, err.Error())
-			modSpan.End()
-			return nil, err
-		}
-
-		if rsp.IsConsensusParamsChanged() {
-			paramsChanged = true
-		}
-
-		modSpan.End()
 	}
-
 	return &sdk.ResponsePreBlock{
 		ConsensusParamsChanged: paramsChanged,
+		Events:                 ctx.EventManager().ABCIEvents(),
 	}, nil
 }
 
@@ -803,23 +773,13 @@ func (m *Manager) PreBlock(ctx sdk.Context) (*sdk.ResponsePreBlock, error) {
 // child context with an event manager to aggregate events emitted from all
 // modules.
 func (m *Manager) BeginBlock(ctx sdk.Context) (sdk.BeginBlock, error) {
-	var span trace.Span
-	ctx, span = ctx.StartSpan(tracer, "Manager.BeginBlock")
-	defer span.End()
-
 	ctx = ctx.WithEventManager(sdk.NewEventManager())
 	for _, moduleName := range m.OrderBeginBlockers {
-		var modSpan trace.Span
-		ctx, modSpan = ctx.StartSpan(tracer, fmt.Sprintf("BeginBlock.%s", moduleName))
 		if module, ok := m.Modules[moduleName].(appmodule.HasBeginBlocker); ok {
 			if err := module.BeginBlock(ctx); err != nil {
-				modSpan.RecordError(err)
-				modSpan.SetStatus(codes.Error, err.Error())
-				modSpan.End()
 				return sdk.BeginBlock{}, err
 			}
 		}
-		modSpan.End()
 	}
 
 	return sdk.BeginBlock{
@@ -831,49 +791,32 @@ func (m *Manager) BeginBlock(ctx sdk.Context) (sdk.BeginBlock, error) {
 // child context with an event manager to aggregate events emitted from all
 // modules.
 func (m *Manager) EndBlock(ctx sdk.Context) (sdk.EndBlock, error) {
-	var span trace.Span
-	ctx, span = ctx.StartSpan(tracer, "Manager.EndBlock")
-	defer span.End()
-
 	ctx = ctx.WithEventManager(sdk.NewEventManager())
 	validatorUpdates := []abci.ValidatorUpdate{}
 
 	for _, moduleName := range m.OrderEndBlockers {
-		var modSpan trace.Span
-		ctx, modSpan = ctx.StartSpan(tracer, fmt.Sprintf("EndBlock.%s", moduleName))
 		if module, ok := m.Modules[moduleName].(appmodule.HasEndBlocker); ok {
 			err := module.EndBlock(ctx)
 			if err != nil {
-				modSpan.RecordError(err)
-				modSpan.SetStatus(codes.Error, err.Error())
-				modSpan.End()
 				return sdk.EndBlock{}, err
 			}
 		} else if module, ok := m.Modules[moduleName].(HasABCIEndBlock); ok {
 			moduleValUpdates, err := module.EndBlock(ctx)
 			if err != nil {
-				modSpan.RecordError(err)
-				modSpan.SetStatus(codes.Error, err.Error())
-				modSpan.End()
 				return sdk.EndBlock{}, err
 			}
 			// use these validator updates if provided, the module manager assumes
 			// only one module will update the validator set
 			if len(moduleValUpdates) > 0 {
 				if len(validatorUpdates) > 0 {
-					err := errors.New("validator EndBlock updates already set by a previous module")
-					modSpan.RecordError(err)
-					modSpan.SetStatus(codes.Error, err.Error())
-					modSpan.End()
-					return sdk.EndBlock{}, err
+					return sdk.EndBlock{}, errors.New("validator EndBlock updates already set by a previous module")
 				}
 
-				for _, updates := range moduleValUpdates {
-					validatorUpdates = append(validatorUpdates, abci.ValidatorUpdate{PubKey: updates.PubKey, Power: updates.Power})
-				}
+				validatorUpdates = append(validatorUpdates, moduleValUpdates...)
 			}
+		} else {
+			continue
 		}
-		modSpan.End()
 	}
 
 	return sdk.EndBlock{
@@ -918,6 +861,7 @@ func (m *Manager) GetVersionMap() VersionMap {
 		if v, ok := v.(HasConsensusVersion); ok {
 			version = v.ConsensusVersion()
 		}
+		name := name
 		vermap[name] = version
 	}
 
@@ -926,7 +870,7 @@ func (m *Manager) GetVersionMap() VersionMap {
 
 // ModuleNames returns list of all module names, without any particular order.
 func (m *Manager) ModuleNames() []string {
-	return slices.Collect(maps.Keys(m.Modules))
+	return maps.Keys(m.Modules)
 }
 
 // DefaultMigrationsOrder returns a default migrations order: ascending alphabetical by module name,

@@ -46,23 +46,12 @@ var CometBFTAutoCLIDescriptor = &autocliv1.ServiceCommandDescriptor{
 			RpcMethod: "ABCIQuery",
 			Skip:      true,
 		},
-		{
-			RpcMethod: "GetLatestBlockResults",
-			Use:       "block-results-latest",
-			Short:     "Query for the latest block results",
-		},
-		{
-			RpcMethod:      "GetBlockResults",
-			Use:            "block-results [height]",
-			Short:          "Query for block results by height",
-			PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "height"}},
-		},
 	},
 }
 
 // NewCometBFTCommands is a fake `appmodule.Module` to be considered as a module
 // and be added in AutoCLI.
-func NewCometBFTCommands() *cometModule {
+func NewCometBFTCommands() *cometModule { //nolint:revive // fake module and limiting import of core
 	return &cometModule{}
 }
 

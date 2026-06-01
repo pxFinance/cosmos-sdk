@@ -23,7 +23,7 @@ import (
 
 const TimeoutFlag = "timeout"
 
-func newTxResponseCheckTx(res *coretypes.ResultBroadcastTxCommit) *sdk.TxResponse {
+func newTxCheckTxResponse(res *coretypes.ResultBroadcastTxCommit) *sdk.TxResponse {
 	if res == nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func newResponseFormatBroadcastTxCommit(res *coretypes.ResultBroadcastTxCommit) 
 	}
 
 	if !res.CheckTx.IsOK() {
-		return newTxResponseCheckTx(res)
+		return newTxCheckTxResponse(res)
 	}
 
 	return newTxResponseDeliverTx(res)
@@ -94,7 +94,7 @@ func QueryEventForTxCmd() *cobra.Command {
 	return WaitTxCmd()
 }
 
-// WaitTxCmd returns a CLI command that waits for a transaction with the given hash to be included in a block.
+// WaitTx returns a CLI command that waits for a transaction with the given hash to be included in a block.
 func WaitTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "wait-tx [hash]",
@@ -119,7 +119,7 @@ $ %[1]s tx [flags] | %[1]s q wait-tx
 				return err
 			}
 
-			c, err := rpchttp.New(clientCtx.NodeURI, "/websocket")
+			c, err := rpchttp.New(clientCtx.NodeURI)
 			if err != nil {
 				return err
 			}
@@ -204,7 +204,7 @@ func parseHashFromInput(in []byte) ([]byte, error) {
 	// That outputs a sdk.TxResponse as either the json or yaml. As json, we can't unmarshal it back into that struct,
 	// though, because the height field ends up quoted which confuses json.Unmarshal (because it's for an int64 field).
 
-	// Try to find the txhash from json output.
+	// Try to find the txhash from json ouptut.
 	resultTx := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(in, &resultTx); err == nil && len(resultTx["txhash"]) > 0 {
 		// input was JSON, return the hash
@@ -215,8 +215,8 @@ func parseHashFromInput(in []byte) ([]byte, error) {
 	}
 
 	// Try to find the txhash from yaml output.
-	lines := strings.SplitSeq(string(in), "\n")
-	for line := range lines {
+	lines := strings.Split(string(in), "\n")
+	for _, line := range lines {
 		if strings.HasPrefix(line, "txhash:") {
 			hash := strings.TrimSpace(line[len("txhash:"):])
 			return hex.DecodeString(hash)

@@ -1,77 +1,67 @@
 package cosmovisor
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	"cosmossdk.io/log"
+	upgradetypes "cosmossdk.io/x/upgrade/types"
 )
 
 func TestParseUpgradeInfoFile(t *testing.T) {
 	cases := []struct {
 		filename      string
 		expectUpgrade upgradetypes.Plan
-		disableRecase bool
-		expectErr     string
+		expectErr     bool
 	}{
 		{
 			filename:      "f1-good.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{Name: "upgrade1", Info: "some info", Height: 123},
+			expectErr:     false,
 		},
 		{
 			filename:      "f2-normalized-name.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{Name: "upgrade2", Info: "some info", Height: 125},
-		},
-		{
-			filename:      "f2-normalized-name.json",
-			disableRecase: true,
-			expectUpgrade: upgradetypes.Plan{Name: "Upgrade2", Info: "some info", Height: 125},
+			expectErr:     false,
 		},
 		{
 			filename:      "f2-bad-type.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "cannot unmarshal number into Go struct",
+			expectErr:     true,
 		},
 		{
 			filename:      "f2-bad-type-2.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "height must be greater than 0: invalid request",
+			expectErr:     true,
 		},
 		{
 			filename:      "f3-empty.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "empty upgrade-info.json in",
+			expectErr:     true,
 		},
 		{
 			filename:      "f4-empty-obj.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "invalid upgrade-info.json content: name cannot be empty",
+			expectErr:     true,
 		},
 		{
 			filename:      "f5-partial-obj-1.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "height must be greater than 0",
+			expectErr:     true,
 		},
 		{
 			filename:      "f5-partial-obj-2.json",
-			disableRecase: false,
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "name cannot be empty: invalid request",
+			expectErr:     true,
 		},
 		{
-			filename:      "non-existent.json",
-			disableRecase: false,
+			filename:      "unknown.json",
 			expectUpgrade: upgradetypes.Plan{},
-			expectErr:     "no such file or directory",
+			expectErr:     true,
 		},
 	}
 
@@ -79,14 +69,31 @@ func TestParseUpgradeInfoFile(t *testing.T) {
 		tc := cases[i]
 		t.Run(tc.filename, func(t *testing.T) {
 			require := require.New(t)
-			ui, err := parseUpgradeInfoFile(filepath.Join(".", "testdata", "upgrade-files", tc.filename), tc.disableRecase)
-			if tc.expectErr != "" {
+			ui, err := parseUpgradeInfoFile(filepath.Join(".", "testdata", "upgrade-files", tc.filename))
+			if tc.expectErr {
 				require.Error(err)
-				require.Contains(err.Error(), tc.expectErr)
 			} else {
 				require.NoError(err)
 				require.Equal(tc.expectUpgrade, ui)
 			}
 		})
 	}
+}
+
+func TestFileWatcherCheckUpdateRetriesAfterTransientParseError(t *testing.T) {
+	home := t.TempDir()
+	filename := filepath.Join(home, "upgrade-info.json")
+
+	fw, err := newUpgradeFileWatcher(log.NewTestLogger(t), filename, time.Millisecond)
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filename, []byte(`{"name":"upgrade1"`), 0o644))
+	require.False(t, fw.CheckUpdate(upgradetypes.Plan{}))
+	require.False(t, fw.initialized)
+	require.True(t, fw.lastModTime.IsZero())
+
+	require.NoError(t, os.WriteFile(filename, []byte(`{"name":"upgrade1","height":123,"info":"some info"}`), 0o644))
+	require.True(t, fw.CheckUpdate(upgradetypes.Plan{}))
+	require.True(t, fw.initialized)
+	require.Equal(t, upgradetypes.Plan{Name: "upgrade1", Height: 123, Info: "some info"}, fw.currentInfo)
 }

@@ -1,4 +1,5 @@
 //go:build e2e
+// +build e2e
 
 package cmtservice_test
 
@@ -7,9 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
 	"cosmossdk.io/simapp"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client/grpc/cmtservice"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -92,7 +92,7 @@ func (s *E2ETestSuite) TestQueryLatestBlock() {
 	s.Require().NoError(err)
 	var blockInfoRes cmtservice.GetLatestBlockResponse
 	s.Require().NoError(val.ClientCtx.Codec.UnmarshalJSON(restRes, &blockInfoRes))
-	s.Require().Equal(types.ConsAddress(blockInfoRes.Block.Header.ProposerAddress).String(), blockInfoRes.SdkBlock.Header.ProposerAddress) //nolint:staticcheck // this test is for checking equality from the old and new types
+	s.Require().Equal(types.ConsAddress(blockInfoRes.Block.Header.ProposerAddress).String(), blockInfoRes.SdkBlock.Header.ProposerAddress)
 	s.Require().Contains(blockInfoRes.SdkBlock.Header.ProposerAddress, "cosmosvalcons")
 }
 
@@ -156,6 +156,7 @@ func (s *E2ETestSuite) TestLatestValidatorSet_GRPC() {
 		{"with pagination", &cmtservice.GetLatestValidatorSetRequest{Pagination: &qtypes.PageRequest{Offset: 0, Limit: uint64(len(vals))}}, false, ""},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			grpcRes, err := s.queryClient.GetLatestValidatorSet(context.Background(), tc.req)
 			if tc.expErr {
@@ -186,6 +187,7 @@ func (s *E2ETestSuite) TestLatestValidatorSet_GRPCGateway() {
 		{"with pagination", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/validatorsets/latest?pagination.offset=0&pagination.limit=2", vals[0].APIAddress), false, ""},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			res, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -218,6 +220,7 @@ func (s *E2ETestSuite) TestValidatorSetByHeight_GRPC() {
 		{"with pagination", &cmtservice.GetValidatorSetByHeightRequest{Height: 1, Pagination: &qtypes.PageRequest{Offset: 0, Limit: 1}}, false, ""},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			grpcRes, err := s.queryClient.GetValidatorSetByHeight(context.Background(), tc.req)
 			if tc.expErr {
@@ -246,6 +249,7 @@ func (s *E2ETestSuite) TestValidatorSetByHeight_GRPCGateway() {
 		{"with pagination", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/validatorsets/%d?pagination.offset=0&pagination.limit=2", vals[0].APIAddress, 1), false, ""},
 	}
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			res, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -324,6 +328,8 @@ func (s *E2ETestSuite) TestABCIQuery() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			res, err := s.queryClient.ABCIQuery(context.Background(), tc.req)
 			if tc.expectErr {
@@ -346,122 +352,4 @@ func (s *E2ETestSuite) TestABCIQuery() {
 			}
 		})
 	}
-}
-
-func (s *E2ETestSuite) TestQueryBlockResults() {
-	val := s.network.Validators[0]
-
-	// Query block results for height 1
-	res, err := s.queryClient.GetBlockResults(context.Background(), &cmtservice.GetBlockResultsRequest{Height: 1})
-	s.Require().NoError(err)
-	s.Require().Equal(int64(1), res.Height)
-	s.Require().NotNil(res.AppHash)
-
-	// REST endpoint
-	restRes, err := testutil.GetRequest(fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/%d", val.APIAddress, 1))
-	s.Require().NoError(err)
-	var blockResultsRes cmtservice.GetBlockResultsResponse
-	s.Require().NoError(val.ClientCtx.Codec.UnmarshalJSON(restRes, &blockResultsRes))
-	s.Require().Equal(int64(1), blockResultsRes.Height)
-}
-
-func (s *E2ETestSuite) TestQueryLatestBlockResults() {
-	val := s.network.Validators[0]
-
-	// gRPC query
-	res, err := s.queryClient.GetLatestBlockResults(context.Background(), &cmtservice.GetLatestBlockResultsRequest{})
-	s.Require().NoError(err)
-	s.Require().Greater(res.Height, int64(0))
-	s.Require().NotNil(res.AppHash)
-
-	// REST endpoint
-	restRes, err := testutil.GetRequest(fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/latest", val.APIAddress))
-	s.Require().NoError(err)
-	var blockResultsRes cmtservice.GetLatestBlockResultsResponse
-	s.Require().NoError(val.ClientCtx.Codec.UnmarshalJSON(restRes, &blockResultsRes))
-	s.Require().Greater(blockResultsRes.Height, int64(0))
-}
-
-func (s *E2ETestSuite) TestBlockResults_GRPC() {
-	testCases := []struct {
-		name      string
-		req       *cmtservice.GetBlockResultsRequest
-		expErr    bool
-		expErrMsg string
-	}{
-		{"nil request", nil, true, "cannot be nil"},
-		{"height 0", &cmtservice.GetBlockResultsRequest{Height: 0}, true, "height must be greater than 0"},
-		{"negative height", &cmtservice.GetBlockResultsRequest{Height: -1}, true, "height must be greater than 0"},
-		{"valid height 1", &cmtservice.GetBlockResultsRequest{Height: 1}, false, ""},
-		{"future height", &cmtservice.GetBlockResultsRequest{Height: 999999999}, true, "bigger than the chain length"},
-	}
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			grpcRes, err := s.queryClient.GetBlockResults(context.Background(), tc.req)
-			if tc.expErr {
-				s.Require().Error(err)
-				s.Require().Contains(err.Error(), tc.expErrMsg)
-			} else {
-				s.Require().NoError(err)
-				s.Require().Equal(tc.req.Height, grpcRes.Height)
-				s.Require().NotNil(grpcRes.AppHash)
-			}
-		})
-	}
-}
-
-func (s *E2ETestSuite) TestBlockResults_GRPCGateway() {
-	vals := s.network.Validators
-	testCases := []struct {
-		name      string
-		url       string
-		expErr    bool
-		expErrMsg string
-	}{
-		{"valid height", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/%d", vals[0].APIAddress, 1), false, ""},
-		{"invalid height 0", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/%d", vals[0].APIAddress, 0), true, "height must be greater than 0"},
-		{"invalid negative height", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/%d", vals[0].APIAddress, -1), true, "height must be greater than 0"},
-		{"future height", fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/%d", vals[0].APIAddress, 999999999), true, "bigger than the chain length"},
-	}
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			res, err := testutil.GetRequest(tc.url)
-			s.Require().NoError(err)
-			if tc.expErr {
-				s.Require().Contains(string(res), tc.expErrMsg)
-			} else {
-				var result cmtservice.GetBlockResultsResponse
-				err = vals[0].ClientCtx.Codec.UnmarshalJSON(res, &result)
-				s.Require().NoError(err)
-				s.Require().Greater(result.Height, int64(0))
-				s.Require().NotNil(result.AppHash)
-			}
-		})
-	}
-}
-
-func (s *E2ETestSuite) TestLatestBlockResults_GRPCGateway() {
-	vals := s.network.Validators
-	res, err := testutil.GetRequest(fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/block_results/latest", vals[0].APIAddress))
-	s.Require().NoError(err)
-	var result cmtservice.GetLatestBlockResultsResponse
-	err = vals[0].ClientCtx.Codec.UnmarshalJSON(res, &result)
-	s.Require().NoError(err)
-	s.Require().Greater(result.Height, int64(0))
-	s.Require().NotNil(result.AppHash)
-}
-
-func (s *E2ETestSuite) TestBlockResultsContainsFinalizeBlockEvents() {
-	// Wait for a few blocks to ensure we have finalize block events
-	s.Require().NoError(s.network.WaitForNextBlock())
-	s.Require().NoError(s.network.WaitForNextBlock())
-
-	// Get latest block results
-	res, err := s.queryClient.GetLatestBlockResults(context.Background(), &cmtservice.GetLatestBlockResultsRequest{})
-	s.Require().NoError(err)
-	s.Require().Greater(res.Height, int64(1))
-
-	// FinalizeBlockEvents should contain mint/distribution events from BeginBlock
-	// At minimum, blocks should have some events from minting/distribution
-	s.Require().NotNil(res.FinalizeBlockEvents, "expected finalize_block_events to be present")
 }

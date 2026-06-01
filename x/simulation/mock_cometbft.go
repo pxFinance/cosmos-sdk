@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -8,8 +9,12 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
+)
+
+// TODO: move this somewhere else
+const (
+	TruncatedSize = 20
 )
 
 type mockValidator struct {
@@ -19,7 +24,7 @@ type mockValidator struct {
 
 func (mv mockValidator) String() string {
 	return fmt.Sprintf("mockValidator{%s power:%v state:%v}",
-		mv.val.PubKey.String(),
+		string(mv.val.PubKeyBytes),
 		mv.val.Power,
 		mv.livenessState)
 }
@@ -31,7 +36,7 @@ func newMockValidators(r *rand.Rand, abciVals []abci.ValidatorUpdate, params Par
 	validators := make(mockValidators)
 
 	for _, validator := range abciVals {
-		str := fmt.Sprintf("%X", validator.PubKey.GetEd25519())
+		str := fmt.Sprintf("%X", validator.PubKeyBytes)
 		liveliness := GetMemberOfInitialState(r, params.InitialLivenessWeightings())
 
 		validators[str] = mockValidator{
@@ -68,12 +73,7 @@ func (vals mockValidators) randomProposer(r *rand.Rand) []byte {
 	key := keys[r.Intn(len(keys))]
 
 	proposer := vals[key].val
-	pk, err := cryptoenc.PubKeyFromProto(proposer.PubKey)
-	if err != nil {
-		panic(err)
-	}
-
-	return pk.Address()
+	return SumTruncated(proposer.PubKeyBytes)
 }
 
 // updateValidators mimics CometBFT's update logic.
@@ -85,10 +85,8 @@ func updateValidators(
 	updates []abci.ValidatorUpdate,
 	event func(route, op, evResult string),
 ) map[string]mockValidator {
-	tb.Helper()
-
 	for _, update := range updates {
-		str := fmt.Sprintf("%X", update.PubKey.GetEd25519())
+		str := fmt.Sprintf("%X", update.PubKeyBytes)
 
 		if update.Power == 0 {
 			if _, ok := current[str]; !ok {
@@ -113,9 +111,9 @@ func updateValidators(
 	return current
 }
 
-// RandomRequestFinalizeBlock generates a list of signing validators according to
+// RandomFinalizeBlockRequest generates a list of signing validators according to
 // the provided list of validators, signing fraction, and evidence fraction
-func RandomRequestFinalizeBlock(
+func RandomFinalizeBlockRequest(
 	r *rand.Rand,
 	params Params,
 	validators mockValidators,
@@ -125,9 +123,9 @@ func RandomRequestFinalizeBlock(
 	blockHeight int64,
 	time time.Time,
 	proposer []byte,
-) *abci.RequestFinalizeBlock {
+) *abci.FinalizeBlockRequest {
 	if len(validators) == 0 {
-		return &abci.RequestFinalizeBlock{
+		return &abci.FinalizeBlockRequest{
 			Height:          blockHeight,
 			Time:            time,
 			ProposerAddress: proposer,
@@ -141,43 +139,34 @@ func RandomRequestFinalizeBlock(
 		mVal.livenessState = params.LivenessTransitionMatrix().NextState(r, mVal.livenessState)
 		signed := true
 
-		switch mVal.livenessState {
-		case 1:
+		if mVal.livenessState == 1 {
 			// spotty connection, 50% probability of success
 			// See https://github.com/golang/go/issues/23804#issuecomment-365370418
 			// for reasoning behind computing like this
 			signed = r.Int63()%2 == 0
-		case 2:
+		} else if mVal.livenessState == 2 {
 			// offline
 			signed = false
 		}
 
-		var commitStatus cmtproto.BlockIDFlag
 		if signed {
 			event("begin_block", "signing", "signed")
-			commitStatus = cmtproto.BlockIDFlagCommit
 		} else {
 			event("begin_block", "signing", "missed")
-			commitStatus = cmtproto.BlockIDFlagAbsent
-		}
-
-		pubkey, err := cryptoenc.PubKeyFromProto(mVal.val.PubKey)
-		if err != nil {
-			panic(err)
 		}
 
 		voteInfos[i] = abci.VoteInfo{
 			Validator: abci.Validator{
-				Address: pubkey.Address(),
+				Address: SumTruncated(mVal.val.PubKeyBytes),
 				Power:   mVal.val.Power,
 			},
-			BlockIdFlag: commitStatus,
+			BlockIdFlag: cmtproto.BlockIDFlagCommit,
 		}
 	}
 
 	// return if no past times
 	if len(pastTimes) == 0 {
-		return &abci.RequestFinalizeBlock{
+		return &abci.FinalizeBlockRequest{
 			Height:          blockHeight,
 			Time:            time,
 			ProposerAddress: proposer,
@@ -210,7 +199,7 @@ func RandomRequestFinalizeBlock(
 
 		evidence = append(evidence,
 			abci.Misbehavior{
-				Type:             abci.MisbehaviorType_DUPLICATE_VOTE,
+				Type:             abci.MISBEHAVIOR_TYPE_DUPLICATE_VOTE,
 				Validator:        validator,
 				Height:           height,
 				Time:             misbehaviorTime,
@@ -221,7 +210,7 @@ func RandomRequestFinalizeBlock(
 		event("begin_block", "evidence", "ok")
 	}
 
-	return &abci.RequestFinalizeBlock{
+	return &abci.FinalizeBlockRequest{
 		Height:          blockHeight,
 		Time:            time,
 		ProposerAddress: proposer,
@@ -230,4 +219,10 @@ func RandomRequestFinalizeBlock(
 		},
 		Misbehavior: evidence,
 	}
+}
+
+// SumTruncated returns the first 20 bytes of SHA256 of the bz.
+func SumTruncated(bz []byte) []byte {
+	hash := sha256.Sum256(bz)
+	return hash[:TruncatedSize]
 }

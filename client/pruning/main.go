@@ -8,13 +8,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/rootmulti"
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
 )
 
 const FlagAppDBBackend = "app-db-backend"
@@ -44,7 +44,7 @@ Supported app-db-backend types include 'goleveldb', 'rocksdb', 'pebbledb'.`,
 				return err
 			}
 
-			// force sync pruning so that the command will wait for the pruning to finish before returning.
+			// must disable async pruning
 			vp.Set(server.FlagIAVLSyncPruning, true)
 
 			// use the first argument if present to set the pruning method
@@ -58,10 +58,9 @@ Supported app-db-backend types include 'goleveldb', 'rocksdb', 'pebbledb'.`,
 				return err
 			}
 
-			cmd.Printf("get pruning options from command flags, strategy: %v, keep-recent: %d, interval: %d\n",
+			cmd.Printf("get pruning options from command flags, strategy: %v, keep-recent: %v\n",
 				pruningOptions.Strategy,
 				pruningOptions.KeepRecent,
-				pruningOptions.Interval,
 			)
 
 			home := vp.GetString(flags.FlagHome)
@@ -73,12 +72,10 @@ Supported app-db-backend types include 'goleveldb', 'rocksdb', 'pebbledb'.`,
 			if err != nil {
 				return err
 			}
-
-			// in our test, it's important to close db explicitly for pebbledb to write to disk.
 			defer db.Close()
 
 			logger := log.NewLogger(cmd.OutOrStdout())
-			app := appCreator(logger, db, vp)
+			app := appCreator(logger, db, nil, vp)
 			cms := app.CommitMultiStore()
 
 			rootMultiStore, ok := cms.(*rootmulti.Store)

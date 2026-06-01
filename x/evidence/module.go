@@ -15,6 +15,11 @@ import (
 	"cosmossdk.io/core/comet"
 	store "cosmossdk.io/core/store"
 	"cosmossdk.io/depinject"
+	eviclient "cosmossdk.io/x/evidence/client"
+	"cosmossdk.io/x/evidence/client/cli"
+	"cosmossdk.io/x/evidence/keeper"
+	"cosmossdk.io/x/evidence/simulation"
+	"cosmossdk.io/x/evidence/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -22,11 +27,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
-	eviclient "github.com/cosmos/cosmos-sdk/x/evidence/client"
-	"github.com/cosmos/cosmos-sdk/x/evidence/client/cli"
-	keeper3 "github.com/cosmos/cosmos-sdk/x/evidence/keeper"
-	"github.com/cosmos/cosmos-sdk/x/evidence/simulation"
-	"github.com/cosmos/cosmos-sdk/x/evidence/types"
 )
 
 var (
@@ -48,7 +48,7 @@ type AppModuleBasic struct {
 	evidenceHandlers []eviclient.EvidenceHandler // eviclient evidence submission handlers
 }
 
-// NewAppModuleBasic creates an AppModuleBasic without the codec.
+// NewAppModuleBasic creates a AppModuleBasic without the codec.
 func NewAppModuleBasic(evidenceHandlers ...eviclient.EvidenceHandler) AppModuleBasic {
 	return AppModuleBasic{
 		evidenceHandlers: evidenceHandlers,
@@ -89,10 +89,6 @@ func (a AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux 
 
 // GetTxCmd returns the evidence module's root tx command.
 func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	if len(a.evidenceHandlers) == 0 {
-		return nil
-	}
-
 	evidenceCLIHandlers := make([]*cobra.Command, len(a.evidenceHandlers))
 
 	for i, evidenceHandler := range a.evidenceHandlers {
@@ -115,11 +111,11 @@ func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) 
 type AppModule struct {
 	AppModuleBasic
 
-	keeper keeper3.Keeper
+	keeper keeper.Keeper
 }
 
 // NewAppModule creates a new AppModule object.
-func NewAppModule(keeper keeper3.Keeper) AppModule {
+func NewAppModule(keeper keeper.Keeper) AppModule {
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{},
 		keeper:         keeper,
@@ -134,12 +130,12 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(registrar grpc.ServiceRegistrar) error {
-	types.RegisterMsgServer(registrar, keeper3.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(registrar, keeper3.NewQuerier(&am.keeper))
+	types.RegisterMsgServer(registrar, keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(registrar, keeper.NewQuerier(&am.keeper))
 	return nil
 }
 
-// InitGenesis performs the evidence module's genesis initialization. It returns
+// InitGenesis performs the evidence module's genesis initialization It returns
 // no validator updates.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, bz json.RawMessage) {
 	var gs types.GenesisState
@@ -176,7 +172,7 @@ func (am AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
 	sdr[types.StoreKey] = simtypes.NewStoreDecoderFuncFromCollectionsSchema(am.keeper.Schema)
 }
 
-// WeightedOperations returns all the gov module operations with their respective weights.
+// WeightedOperations returns the all the gov module operations with their respective weights.
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	return nil
 }
@@ -207,12 +203,12 @@ type ModuleInputs struct {
 type ModuleOutputs struct {
 	depinject.Out
 
-	EvidenceKeeper keeper3.Keeper
+	EvidenceKeeper keeper.Keeper
 	Module         appmodule.AppModule
 }
 
 func ProvideModule(in ModuleInputs) ModuleOutputs {
-	k := keeper3.NewKeeper(in.Cdc, in.StoreService, in.StakingKeeper, in.SlashingKeeper, in.AddressCodec, in.BlockInfoService)
+	k := keeper.NewKeeper(in.Cdc, in.StoreService, in.StakingKeeper, in.SlashingKeeper, in.AddressCodec, in.BlockInfoService)
 	m := NewAppModule(*k)
 
 	return ModuleOutputs{EvidenceKeeper: *k, Module: m}

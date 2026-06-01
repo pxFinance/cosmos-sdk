@@ -23,7 +23,7 @@ func NewGenesisState(
 	}
 }
 
-// DefaultGenesisState returns the default genesis state of distribution.
+// get raw genesis raw message for testing
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
 		FeePool:                         InitialFeePool(),

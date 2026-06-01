@@ -7,8 +7,7 @@ import (
 
 	"cosmossdk.io/collections"
 	collcodec "cosmossdk.io/collections/codec"
-
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	storetypes "cosmossdk.io/store/types"
 )
 
 // WithCollectionPaginationPairPrefix applies a prefix to a collection, whose key is a collection.Pair,
@@ -105,7 +104,7 @@ func CollectionFilteredPaginate[K, V any, C Collection[K, V], T any](
 		return results, new(PageResponse), nil
 	}
 	// strip the prefix from next key
-	if pageRes != nil && len(pageRes.NextKey) != 0 && prefix != nil {
+	if len(pageRes.NextKey) != 0 && prefix != nil {
 		pageRes.NextKey = pageRes.NextKey[len(prefix):]
 	}
 	return results, pageRes, err
@@ -129,10 +128,13 @@ func collFilteredPaginateNoKey[K, V any, C Collection[K, V], T any](
 		return nil, nil, err
 	}
 	defer iterator.Close()
+	// we advance the iter equal to the provided offset
+	if !advanceIter(iterator, offset) {
+		return nil, nil, collections.ErrInvalidIterator
+	}
 
 	var (
 		count   uint64
-		skipped uint64
 		nextKey []byte
 		results []T
 	)
@@ -147,11 +149,6 @@ func collFilteredPaginateNoKey[K, V any, C Collection[K, V], T any](
 			}
 			// if no predicate function is specified then we just include the result
 			if predicateFunc == nil {
-				if skipped < offset {
-					skipped++
-					continue
-				}
-
 				transformed, err := transformFunc(kv.Key, kv.Value)
 				if err != nil {
 					return nil, nil, err
@@ -166,12 +163,6 @@ func collFilteredPaginateNoKey[K, V any, C Collection[K, V], T any](
 					return nil, nil, err
 				}
 				if include {
-					// Item matches filter - check if we need to skip it for offset
-					if skipped < offset {
-						skipped++
-						continue
-					}
-
 					transformed, err := transformFunc(kv.Key, kv.Value)
 					if err != nil {
 						return nil, nil, err
@@ -233,6 +224,20 @@ func collFilteredPaginateNoKey[K, V any, C Collection[K, V], T any](
 	return results, resp, nil
 }
 
+func advanceIter[I interface {
+	Next()
+	Valid() bool
+}](iter I, offset uint64,
+) bool {
+	for i := uint64(0); i < offset; i++ {
+		if !iter.Valid() {
+			return false
+		}
+		iter.Next()
+	}
+	return true
+}
+
 // collFilteredPaginateByKey paginates a collection when a starting key
 // is provided in the PageRequest. Predicate is applied only if not nil.
 func collFilteredPaginateByKey[K, V any, C Collection[K, V], T any](
@@ -252,59 +257,53 @@ func collFilteredPaginateByKey[K, V any, C Collection[K, V], T any](
 	defer iterator.Close()
 
 	var (
-		count       uint64
-		nextKey     []byte
-		transformed T
+		count   uint64
+		nextKey []byte
 	)
 
 	for ; iterator.Valid(); iterator.Next() {
+		// if we reached the specified limit
+		// then we get the next key, and we exit the iteration.
+		if count == limit {
+			concreteKey, err := iterator.Key()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			nextKey, err = encodeCollKey[K, V](coll, concreteKey)
+			if err != nil {
+				return nil, nil, err
+			}
+			break
+		}
+
 		kv, err := iterator.KeyValue()
 		if err != nil {
 			return nil, nil, err
 		}
-
-		include := false
 		// if no predicate is specified then we just append the result
 		if predicateFunc == nil {
-			transformed, err = transformFunc(kv.Key, kv.Value)
+			transformed, err := transformFunc(kv.Key, kv.Value)
 			if err != nil {
 				return nil, nil, err
 			}
-			include = true
+			results = append(results, transformed)
 			// if predicate is applied we execute the predicate function
 			// and append only if predicateFunc yields true.
 		} else {
-			include, err = predicateFunc(kv.Key, kv.Value)
+			include, err := predicateFunc(kv.Key, kv.Value)
 			if err != nil {
 				return nil, nil, err
 			}
 			if include {
-				transformed, err = transformFunc(kv.Key, kv.Value)
+				transformed, err := transformFunc(kv.Key, kv.Value)
 				if err != nil {
 					return nil, nil, err
 				}
+				results = append(results, transformed)
 			}
 		}
-
-		if include {
-			// if we reached the specified limit
-			// then we get the next key, and we exit the iteration.
-			if count == limit {
-				concreteKey, err := iterator.Key()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				nextKey, err = encodeCollKey[K, V](coll, concreteKey)
-				if err != nil {
-					return nil, nil, err
-				}
-				break
-			}
-
-			results = append(results, transformed)
-			count++
-		}
+		count++
 	}
 
 	return results, &PageResponse{

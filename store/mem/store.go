@@ -1,12 +1,15 @@
 package mem
 
 import (
+	"io"
+
 	dbm "github.com/cosmos/cosmos-db"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/dbadapter"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/dbadapter"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/tracekv"
+	"cosmossdk.io/store/types"
 )
 
 var (
@@ -38,8 +41,13 @@ func (s Store) CacheWrap() types.CacheWrap {
 	return cachekv.NewStore(s)
 }
 
+// CacheWrapWithTrace implements KVStore.
+func (s Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
+	return cachekv.NewStore(tracekv.NewStore(s, w, tc))
+}
+
 // Commit performs a no-op as entries are persistent between commitments.
-func (s *Store) Commit() (id types.CommitID) { return id }
+func (s *Store) Commit() (id types.CommitID) { return }
 
 func (s *Store) SetPruning(pruning pruningtypes.PruningOptions) {}
 
@@ -49,6 +57,6 @@ func (s *Store) GetPruning() pruningtypes.PruningOptions {
 	return pruningtypes.NewPruningOptions(pruningtypes.PruningUndefined)
 }
 
-func (s Store) LastCommitID() (id types.CommitID) { return id }
+func (s Store) LastCommitID() (id types.CommitID) { return }
 
-func (s Store) WorkingHash() (hash []byte) { return hash }
+func (s Store) WorkingHash() (hash []byte) { return }

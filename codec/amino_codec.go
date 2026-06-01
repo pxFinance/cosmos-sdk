@@ -4,10 +4,9 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 )
 
-// AminoCodec defines a codec that utilizes Codec for both binary and JSON
+// Deprecated: AminoCodec defines a codec that utilizes Codec for both binary and JSON
 // encoding. Any usage of amino should be done using the LegacyAmino type directly.
-//
-// Deprecated: Usage of amino with the Codec type is not well-supported and may be removed in the future.
+// Usage of amino with the Codec type is not well-supported and may be removed in the future.
 type AminoCodec struct {
 	*LegacyAmino
 }
@@ -105,7 +104,7 @@ func (ac *AminoCodec) MarshalInterface(i proto.Message) ([]byte, error) {
 //
 //	var x MyInterface
 //	err := cdc.UnmarshalInterface(bz, &x)
-func (ac *AminoCodec) UnmarshalInterface(bz []byte, ptr any) error {
+func (ac *AminoCodec) UnmarshalInterface(bz []byte, ptr interface{}) error {
 	return ac.LegacyAmino.Unmarshal(bz, ptr)
 }
 
@@ -127,6 +126,6 @@ func (ac *AminoCodec) MarshalInterfaceJSON(i proto.Message) ([]byte, error) {
 //
 //	var x MyInterface
 //	err := cdc.UnmarshalInterfaceJSON(bz, &x)
-func (ac *AminoCodec) UnmarshalInterfaceJSON(bz []byte, ptr any) error {
+func (ac *AminoCodec) UnmarshalInterfaceJSON(bz []byte, ptr interface{}) error {
 	return ac.LegacyAmino.UnmarshalJSON(bz, ptr)
 }

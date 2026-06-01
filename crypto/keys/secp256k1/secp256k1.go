@@ -10,7 +10,7 @@ import (
 
 	"github.com/cometbft/cometbft/crypto"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"golang.org/x/crypto/ripemd160" //nolint // using just for backwards compat
+	"golang.org/x/crypto/ripemd160" //nolint: staticcheck // keep around for backwards compatibility
 
 	errorsmod "cosmossdk.io/errors"
 
@@ -99,9 +99,8 @@ func genPrivKey(rand io.Reader) []byte {
 		}
 
 		d.SetBytes(privKeyBytes[:])
-		// break if we found a valid point (i.e. > 0 and < N == curveOrder)
-		// TODO: replace S256().N with secp256k1 package's new API - elliptic.Curve is deprecated (SA1019)
-		isValidFieldElement := 0 < d.Sign() && d.Cmp(secp256k1.S256().N) < 0 //nolint:staticcheck // TODO: migrate off deprecated elliptic.Curve
+		// break if we found a valid point (i.e. > 0 and < N == curverOrder)
+		isValidFieldElement := 0 < d.Sign() && d.Cmp(secp256k1.S256().N) < 0
 		if isValidFieldElement {
 			break
 		}
@@ -129,8 +128,7 @@ func GenPrivKeyFromSecret(secret []byte) *PrivKey {
 	// https://apps.nsa.gov/iaarchive/library/ia-guidance/ia-solutions-for-classified/algorithm-guidance/suite-b-implementers-guide-to-fips-186-3-ecdsa.cfm
 	// see also https://github.com/golang/go/blob/0380c9ad38843d523d9c9804fe300cb7edd7cd3c/src/crypto/ecdsa/ecdsa.go#L89-L101
 	fe := new(big.Int).SetBytes(secHash[:])
-	// TODO: replace S256().N with secp256k1 package's new API - elliptic.Curve is deprecated (SA1019)
-	n := new(big.Int).Sub(secp256k1.S256().N, one) //nolint:staticcheck // TODO: migrate off deprecated elliptic.Curve
+	n := new(big.Int).Sub(secp256k1.S256().N, one)
 	fe.Mod(fe, n)
 	fe.Add(fe, one)
 
@@ -160,9 +158,9 @@ func (pubKey *PubKey) Address() crypto.Address {
 	}
 
 	sha := sha256.Sum256(pubKey.Key)
-	hasherRIPEMD160 := ripemd160.New() //nolint:gosec // keeping around for backwards compatibility
-	hasherRIPEMD160.Write(sha[:])      // does not error
-	return hasherRIPEMD160.Sum(nil)
+	hasherRIPEMD160 := ripemd160.New()
+	hasherRIPEMD160.Write(sha[:]) // does not error
+	return crypto.Address(hasherRIPEMD160.Sum(nil))
 }
 
 // Bytes returns the pubkey byte format.

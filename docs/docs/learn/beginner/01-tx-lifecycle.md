@@ -39,23 +39,7 @@ Additionally, there are several [flags](../advanced/07-cli.md) users can use to 
 
 The ultimate value of the fees paid is equal to the gas multiplied by the gas prices. In other words, `fees = ceil(gas * gasPrices)`. Thus, since fees can be calculated using gas prices and vice versa, the users specify only one of the two.
 
-Later, validators decide whether to include the transaction in their block by comparing the given or calculated `gas-prices` to their local `min-gas-prices`. `Tx` is rejected if its `gas-prices` is not high enough, so users are incentivized to pay more.
-
-#### Unordered Transactions
-
-With Cosmos SDK v0.53.0, users may send unordered transactions to chains that have this feature enabled.
-The following flags allow a user to build an unordered transaction from the CLI.
-
-* `--unordered` specifies that this transaction should be unordered. (transaction sequence must be unset)
-* `--timeout-duration` specifies the amount of time the unordered transaction should be valid in the mempool. The transaction's unordered nonce will be set to the time of transaction creation + timeout duration.
-
-:::warning
-
-Unordered transactions MUST leave sequence values unset. When a transaction is both unordered and contains a non-zero sequence value,
-the transaction will be rejected. External services that operate on prior assumptions about transaction sequence values should be updated to handle unordered transactions.
-Services should be aware that when the transaction is unordered, the transaction sequence will always be zero.
-
-:::
+Later, validators decide whether or not to include the transaction in their block by comparing the given or calculated `gas-prices` to their local `min-gas-prices`. `Tx` is rejected if its `gas-prices` is not high enough, so users are incentivized to pay more.
 
 #### CLI Example
 
@@ -98,7 +82,7 @@ through several steps, beginning with decoding `Tx`.
 
 ### Decoding
 
-When `Tx` is received by the application from the underlying consensus engine (e.g. CometBFT), it is still in its [encoded](../advanced/05-encoding.md) `[]byte` form and needs to be unmarshaled in order to be processed. Then, the [`runTx`](../advanced/00-baseapp.md#runtx-antehandler-runmsgs-posthandler) function is called to run in `runTxModeCheck` mode, meaning the function runs all checks but exits before executing messages and writing state changes.
+When `Tx` is received by the application from the underlying consensus engine (e.g. CometBFT ), it is still in its [encoded](../advanced/05-encoding.md) `[]byte` form and needs to be unmarshaled in order to be processed. Then, the [`runTx`](../advanced/00-baseapp.md#runtx-antehandler-runmsgs-posthandler) function is called to run in `runTxModeCheck` mode, meaning the function runs all checks but exits before executing messages and writing state changes.
 
 ### ValidateBasic (deprecated)
 
@@ -129,7 +113,7 @@ A copy of the cached context is provided to the `AnteHandler`, which performs li
 For example, the [`auth`](https://github.com/cosmos/cosmos-sdk/tree/main/x/auth/spec) module `AnteHandler` checks and increments sequence numbers, checks signatures and account numbers, and deducts fees from the first signer of the transaction - all state changes are made using the `checkState`.
 
 :::warning
-Ante handlers only run on a transaction. If a transaction embeds multiple messages (like some x/authz, x/gov transactions for instance), the ante handlers only have awareness of the outer message. Inner messages are mostly directly routed to the [message router](https://docs.cosmos.network/main/learn/advanced/baseapp#msg-service-router) and will skip the chain of ante handlers. Keep that in mind when designing your own ante handler.
+Ante handlers only run on a transaction. If a transaction embed multiple messages (like some x/authz, x/gov transactions for instance), the ante handlers only have awareness of the outer message. Inner messages are mostly directly routed to the [message router](https://docs.cosmos.network/main/learn/advanced/baseapp#msg-service-router) and will skip the chain of ante handlers. Keep that in mind when designing your own ante handler.
 :::
 
 ### Gas
@@ -246,7 +230,7 @@ Instead of using their `checkState`, full-nodes use `finalizeblock`:
   
 * **`Msg` service:** Protobuf `Msg` service is responsible for executing each message in the `Tx` and causes state transitions to persist in `finalizeBlockState`.
 
-* **PostHandlers:** [`PostHandler`](../advanced/00-baseapp.md#posthandler)s run after the execution of the message. If they fail, the state change of `runMsgs`, as well as `PostHandlers`, are both reverted.
+* **PostHandlers:** [`PostHandler`](../advanced/00-baseapp.md#posthandler)s run after the execution of the message. If they fail, the state change of `runMsgs`, as well of `PostHandlers`, are both reverted.
 
 * **Gas:** While a `Tx` is being delivered, a `GasMeter` is used to keep track of how much
   gas is being used; if execution completes, `GasUsed` is set and returned in the

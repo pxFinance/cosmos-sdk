@@ -8,10 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
-
-	"github.com/cosmos/cosmos-sdk/store/v2/snapshots"
-	"github.com/cosmos/cosmos-sdk/store/v2/snapshots/types"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store/snapshots"
+	"cosmossdk.io/store/snapshots/types"
 )
 
 var opts = types.NewSnapshotOptions(1500, 2)
@@ -69,9 +68,8 @@ func TestManager_Take(t *testing.T) {
 		{7, 8, 9},
 	}
 	snapshotter := &mockSnapshotter{
-		items:            items,
-		announcedHeights: make(map[int64]struct{}),
-		prunedHeights:    make(map[int64]struct{}),
+		items:         items,
+		prunedHeights: make(map[int64]struct{}),
 	}
 	extSnapshotter := newExtSnapshotter(10)
 
@@ -140,8 +138,7 @@ func TestManager_Prune(t *testing.T) {
 func TestManager_Restore(t *testing.T) {
 	store := setupStore(t)
 	target := &mockSnapshotter{
-		announcedHeights: make(map[int64]struct{}),
-		prunedHeights:    make(map[int64]struct{}),
+		prunedHeights: make(map[int64]struct{}),
 	}
 	extSnapshotter := newExtSnapshotter(0)
 	manager := snapshots.NewManager(store, opts, target, nil, log.NewNopLogger())
@@ -171,7 +168,7 @@ func TestManager_Restore(t *testing.T) {
 	err = manager.Restore(types.Snapshot{Height: 3, Format: types.CurrentFormat, Hash: []byte{1, 2, 3}})
 	require.Error(t, err)
 
-	// Restore errors on chunk and chunk hashes mismatch
+	// Restore errors on chunk and chunkhashes mismatch
 	err = manager.Restore(types.Snapshot{
 		Height:   3,
 		Format:   types.CurrentFormat,
@@ -258,31 +255,4 @@ func TestManager_TakeError(t *testing.T) {
 
 	_, err = manager.Create(1)
 	require.Error(t, err)
-}
-
-type mockExtensionSnapshotter struct {
-	types.ExtensionSnapshotter
-	formats []uint32
-}
-
-func (m *mockExtensionSnapshotter) SnapshotName() string       { return "mock" }
-func (m *mockExtensionSnapshotter) SupportedFormats() []uint32 { return m.formats }
-
-func TestIsFormatSupported(t *testing.T) {
-	mockExtension := &mockExtensionSnapshotter{
-		formats: []uint32{1, 2},
-	}
-
-	t.Run("supported format", func(t *testing.T) {
-		require.True(t, snapshots.IsFormatSupported(mockExtension, 1))
-	})
-
-	t.Run("unsupported format", func(t *testing.T) {
-		require.False(t, snapshots.IsFormatSupported(mockExtension, 3))
-	})
-
-	t.Run("empty supported formats", func(t *testing.T) {
-		emptyExtension := &mockExtensionSnapshotter{formats: []uint32{}}
-		require.False(t, snapshots.IsFormatSupported(emptyExtension, 1))
-	})
 }

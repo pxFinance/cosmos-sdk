@@ -1,8 +1,7 @@
 package types
 
 import (
-	"context"
-	"strings"
+	context "context"
 
 	errorsmod "cosmossdk.io/errors"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/authz"
 )
 
-// TODO: Revisit this once we have proper gas fee framework.
+// TODO: Revisit this once we have propoer gas fee framework.
 // Tracking issues https://github.com/cosmos/cosmos-sdk/issues/9054, https://github.com/cosmos/cosmos-sdk/discussions/9072
 const gasCostPerIteration = uint64(10)
 
@@ -105,7 +104,7 @@ func (a StakeAuthorization) Accept(ctx context.Context, msg sdk.Msg) (authz.Acce
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	for _, validator := range allowedList {
 		sdkCtx.GasMeter().ConsumeGas(gasCostPerIteration, "stake authorization")
-		if strings.EqualFold(validator, validatorAddress) {
+		if validator == validatorAddress {
 			isValidatorExists = true
 			break
 		}
@@ -114,7 +113,7 @@ func (a StakeAuthorization) Accept(ctx context.Context, msg sdk.Msg) (authz.Acce
 	denyList := a.GetDenyList().GetAddress()
 	for _, validator := range denyList {
 		sdkCtx.GasMeter().ConsumeGas(gasCostPerIteration, "stake authorization")
-		if strings.EqualFold(validator, validatorAddress) {
+		if validator == validatorAddress {
 			return authz.AcceptResponse{}, sdkerrors.ErrUnauthorized.Wrapf("cannot delegate/undelegate to %s validator", validator)
 		}
 	}

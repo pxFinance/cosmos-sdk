@@ -11,9 +11,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// LegacyInfo is the publicly exposed information about a keypair
-//
-// Deprecated: not to be used, but kept for backwards compatibility.
+// Deprecated: LegacyInfo is the publicly exposed information about a keypair
 type LegacyInfo interface {
 	// Human-readable type for key listing
 	GetType() KeyType
@@ -169,7 +167,7 @@ type multisigPubKeyInfo struct {
 	Weight uint               `json:"weight"`
 }
 
-// LegacyMultiInfo is the public information about a multisig key
+// multiInfo is the public information about a multisig key
 type LegacyMultiInfo struct {
 	Name      string               `json:"name"`
 	PubKey    cryptotypes.PubKey   `json:"pubkey"`
@@ -208,7 +206,7 @@ func (i LegacyMultiInfo) GetAddress() sdk.AccAddress {
 	return i.PubKey.Address().Bytes()
 }
 
-// GetAlgo implements Info interface
+// GetPath implements Info interface
 func (i LegacyMultiInfo) GetAlgo() hd.PubKeyType {
 	return hd.MultiType
 }
@@ -225,6 +223,7 @@ func (i LegacyMultiInfo) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error
 	return codectypes.UnpackInterfaces(multiPK, unpacker)
 }
 
+// encoding info
 func MarshalInfo(i LegacyInfo) []byte {
 	return legacy.Cdc.MustMarshalLengthPrefixed(i)
 }
@@ -251,7 +250,7 @@ func unMarshalLegacyInfo(bz []byte) (info LegacyInfo, err error) {
 		return multi, err
 	}
 
-	return info, err
+	return
 }
 
 // privKeyFromLegacyInfo exports a private key from LegacyInfo

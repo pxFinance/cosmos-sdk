@@ -6,10 +6,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	storetypes "cosmossdk.io/store/types"
+
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -51,10 +52,10 @@ func TestMigration(t *testing.T) {
 			grantee1,
 			sendMsgType,
 			func() authz.Grant {
-				cdcAny, err := codectypes.NewAnyWithValue(sendAuthz)
+				any, err := codectypes.NewAnyWithValue(sendAuthz)
 				require.NoError(t, err)
 				return authz.Grant{
-					Authorization: cdcAny,
+					Authorization: any,
 					Expiration:    &oneDay,
 				}
 			},
@@ -64,10 +65,10 @@ func TestMigration(t *testing.T) {
 			grantee2,
 			sendMsgType,
 			func() authz.Grant {
-				cdcAny, err := codectypes.NewAnyWithValue(sendAuthz)
+				any, err := codectypes.NewAnyWithValue(sendAuthz)
 				require.NoError(t, err)
 				return authz.Grant{
-					Authorization: cdcAny,
+					Authorization: any,
 					Expiration:    &oneDay,
 				}
 			},
@@ -77,10 +78,10 @@ func TestMigration(t *testing.T) {
 			grantee1,
 			genericMsgType,
 			func() authz.Grant {
-				cdcAny, err := codectypes.NewAnyWithValue(authz.NewGenericAuthorization(genericMsgType))
+				any, err := codectypes.NewAnyWithValue(authz.NewGenericAuthorization(genericMsgType))
 				require.NoError(t, err)
 				return authz.Grant{
-					Authorization: cdcAny,
+					Authorization: any,
 					Expiration:    &oneYear,
 				}
 			},
@@ -90,10 +91,10 @@ func TestMigration(t *testing.T) {
 			grantee2,
 			genericMsgType,
 			func() authz.Grant {
-				cdcAny, err := codectypes.NewAnyWithValue(authz.NewGenericAuthorization(genericMsgType))
+				any, err := codectypes.NewAnyWithValue(authz.NewGenericAuthorization(genericMsgType))
 				require.NoError(t, err)
 				return authz.Grant{
-					Authorization: cdcAny,
+					Authorization: any,
 					Expiration:    &blockTime,
 				}
 			},
@@ -105,7 +106,7 @@ func TestMigration(t *testing.T) {
 
 	for _, g := range grants {
 		grant := g.authorization()
-		require.NoError(t, store.Set(v2.GrantStoreKey(g.grantee, g.granter, g.msgType), cdc.MustMarshal(&grant)))
+		store.Set(v2.GrantStoreKey(g.grantee, g.granter, g.msgType), cdc.MustMarshal(&grant))
 	}
 
 	ctx = ctx.WithBlockTime(ctx.BlockTime().Add(1 * time.Hour))

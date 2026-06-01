@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -51,7 +51,7 @@ func StatusCommand() *cobra.Command {
 				return err
 			}
 
-			// In order to maintain backwards compatibility, the default json format output is used
+			// In order to maintain backwards compatibility, the default json format output
 			outputFormat, _ := cmd.Flags().GetString(flags.FlagOutput)
 			if outputFormat == flags.OutputFormatJSON {
 				clientCtx = clientCtx.WithOutputFormat(flags.OutputFormatJSON)
@@ -155,7 +155,7 @@ func VersionCmd() *cobra.Command {
 				BlockProtocol uint64
 				P2PProtocol   uint64
 			}{
-				CometBFT:      cmtversion.TMCoreSemVer,
+				CometBFT:      cmtversion.CMTSemVer,
 				ABCI:          cmtversion.ABCIVersion,
 				BlockProtocol: cmtversion.BlockProtocol,
 				P2PProtocol:   cmtversion.P2PProtocol,
@@ -381,11 +381,11 @@ func BootstrapStateCmd(appCreator types.AppCreator) *cobra.Command {
 					return err
 				}
 
-				app := appCreator(logger, db, serverCtx.Viper)
+				app := appCreator(logger, db, nil, serverCtx.Viper)
 				height = app.CommitMultiStore().LastCommitID().Version
 			}
 
-			return node.BootstrapStateWithGenProvider(cmd.Context(), cfg, cmtcfg.DefaultDBProvider, getGenDocProvider(cfg), uint64(height), nil)
+			return node.BootstrapState(cmd.Context(), cfg, cmtcfg.DefaultDBProvider, getGenDocProvider(cfg), uint64(height), nil)
 		},
 	}
 

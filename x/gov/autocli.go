@@ -61,7 +61,7 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				},
 				{
 					RpcMethod: "Deposit",
-					Use:       "deposit [proposal-id] [depositor-addr]",
+					Use:       "deposit [proposal-id] [depositer-addr]",
 					Short:     "Query details of a deposit",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
 						{ProtoField: "proposal_id"},
@@ -131,13 +131,8 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					},
 				},
 				{
-					RpcMethod:      "UpdateParams",
-					Use:            "update-params-proposal [params]",
-					Short:          "Submit a proposal to update gov module params. Note: the entire params must be provided.",
-					Long:           fmt.Sprintf("Submit a proposal to update gov module params. Note: the entire params must be provided.\n See the fields to fill in by running `%s query gov params --output json`", version.AppName),
-					Example:        fmt.Sprintf(`%s tx gov update-params-proposal '{ params }'`, version.AppName),
-					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "params"}},
-					GovProposal:    true,
+					RpcMethod: "UpdateParams",
+					Skip:      true, // skipped because authority gated
 				},
 			},
 			EnhanceCustomCommand: false, // use custom commands only until v0.51

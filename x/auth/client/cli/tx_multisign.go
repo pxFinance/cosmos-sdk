@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	errorsmod "cosmossdk.io/errors"
+	txsigning "cosmossdk.io/x/tx/signing"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -23,7 +24,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	authclient "github.com/cosmos/cosmos-sdk/x/auth/client"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
 )
 
 // GetMultiSignCommand returns the multi-sign command
@@ -73,15 +73,13 @@ The SIGN_MODE_DIRECT sign mode is not supported.'
 
 func makeMultiSignCmd() func(cmd *cobra.Command, args []string) (err error) {
 	return func(cmd *cobra.Command, args []string) (err error) {
-		_ = cmd.Flags().Set(flags.FlagFrom, args[1])
-
 		clientCtx, err := client.GetClientTxContext(cmd)
 		if err != nil {
 			return err
 		}
 		parsedTx, err := authclient.ReadTxFromFile(clientCtx, args[0])
 		if err != nil {
-			return err
+			return
 		}
 
 		txFactory, err := tx.NewFactoryCLI(clientCtx, cmd.Flags())
@@ -387,7 +385,7 @@ func makeBatchMultisignCmd() func(cmd *cobra.Command, args []string) error {
 func unmarshalSignatureJSON(clientCtx client.Context, filename string) (sigs []signingtypes.SignatureV2, err error) {
 	var bytes []byte
 	if bytes, err = os.ReadFile(filename); err != nil {
-		return sigs, err
+		return
 	}
 	return clientCtx.TxConfig.UnmarshalSignatureJSON(bytes)
 }
@@ -399,9 +397,9 @@ func readSignaturesFromFile(ctx client.Context, filename string) (sigs []signing
 	}
 
 	newString := strings.TrimSuffix(string(bz), "\n")
-	lines := strings.SplitSeq(newString, "\n")
+	lines := strings.Split(newString, "\n")
 
-	for bz := range lines {
+	for _, bz := range lines {
 		sig, err := ctx.TxConfig.UnmarshalSignatureJSON([]byte(bz))
 		if err != nil {
 			return nil, err

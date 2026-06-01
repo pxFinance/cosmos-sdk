@@ -3,8 +3,10 @@ package keeper
 import (
 	"context"
 
+	"cosmossdk.io/errors"
+	"cosmossdk.io/x/upgrade/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 type msgServer struct {
@@ -25,13 +27,15 @@ var (
 )
 
 // SoftwareUpgrade implements the Msg/SoftwareUpgrade Msg service.
-func (k msgServer) SoftwareUpgrade(goCtx context.Context, msg *types.MsgSoftwareUpgrade) (*types.MsgSoftwareUpgradeResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	if err := sdk.ValidateAuthority(ctx, k.authority, msg.Authority); err != nil {
-		return nil, err
+func (k msgServer) SoftwareUpgrade(goCtx context.Context, msg *types.MsgSoftwareUpgrade) (meterResult *types.MsgSoftwareUpgradeResponse, err error) {
+	sdkCtx := sdk.UnwrapSDKContext(goCtx)
+	defer k.Keeper.Meter(goCtx).FuncTiming(&sdkCtx, "SoftwareUpgrade")(&err)
+
+	if k.authority != msg.Authority {
+		return nil, errors.Wrapf(types.ErrInvalidSigner, "expected %s got %s", k.authority, msg.Authority)
 	}
 
-	err := k.ScheduleUpgrade(ctx, msg.Plan)
+	err = k.ScheduleUpgrade(sdkCtx, msg.Plan)
 	if err != nil {
 		return nil, err
 	}
@@ -40,13 +44,15 @@ func (k msgServer) SoftwareUpgrade(goCtx context.Context, msg *types.MsgSoftware
 }
 
 // CancelUpgrade implements the Msg/CancelUpgrade Msg service.
-func (k msgServer) CancelUpgrade(goCtx context.Context, msg *types.MsgCancelUpgrade) (*types.MsgCancelUpgradeResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	if err := sdk.ValidateAuthority(ctx, k.authority, msg.Authority); err != nil {
-		return nil, err
+func (k msgServer) CancelUpgrade(ctx context.Context, msg *types.MsgCancelUpgrade) (meterResult *types.MsgCancelUpgradeResponse, err error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defer k.Keeper.Meter(ctx).FuncTiming(&sdkCtx, "CancelUpgrade")(&err)
+
+	if k.authority != msg.Authority {
+		return nil, errors.Wrapf(types.ErrInvalidSigner, "expected %s got %s", k.authority, msg.Authority)
 	}
 
-	err := k.ClearUpgradePlan(ctx)
+	err = k.ClearUpgradePlan(sdkCtx)
 	if err != nil {
 		return nil, err
 	}

@@ -2,13 +2,13 @@ package ante
 
 import (
 	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+	txsigning "cosmossdk.io/x/tx/signing"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
-	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
 )
 
 // HandlerOptions are the options required for constructing a default SDK AnteHandler.
@@ -20,10 +20,6 @@ type HandlerOptions struct {
 	SignModeHandler        *txsigning.HandlerMap
 	SigGasConsumer         func(meter storetypes.GasMeter, sig signing.SignatureV2, params types.Params) error
 	TxFeeChecker           TxFeeChecker
-	// SigVerifyOptions are the options for the signature verification decorator.
-	// This allows for modification of signature verification behavior, such as how long an unordered transaction can
-	// be valid, or how much gas to charge for unordered transactions.
-	SigVerifyOptions []SigVerificationDecoratorOption
 }
 
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
@@ -53,7 +49,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		NewSetPubKeyDecorator(options.AccountKeeper), // SetPubKeyDecorator must be called before all signature verification decorators
 		NewValidateSigCountDecorator(options.AccountKeeper),
 		NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
-		NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler, options.SigVerifyOptions...),
+		NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 

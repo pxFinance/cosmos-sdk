@@ -4,30 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
 	"sort"
 
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/maps"
 
 	modulev1 "cosmossdk.io/api/cosmos/bank/module/v1"
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/appmodule"
 	corestore "cosmossdk.io/core/store"
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/testutil/simsx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/bank/client/cli"
+	"github.com/cosmos/cosmos-sdk/x/bank/exported"
 	"github.com/cosmos/cosmos-sdk/x/bank/keeper"
+	v1bank "github.com/cosmos/cosmos-sdk/x/bank/migrations/v1"
 	"github.com/cosmos/cosmos-sdk/x/bank/simulation"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -41,6 +42,7 @@ var (
 	_ module.AppModuleSimulation = AppModule{}
 	_ module.HasGenesis          = AppModule{}
 	_ module.HasServices         = AppModule{}
+	_ module.HasInvariants       = AppModule{}
 
 	_ appmodule.AppModule     = AppModule{}
 	_ appmodule.HasEndBlocker = AppModule{}
@@ -91,6 +93,9 @@ func (ab AppModuleBasic) GetTxCmd() *cobra.Command {
 // RegisterInterfaces registers interfaces and implementations of the bank module.
 func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 	types.RegisterInterfaces(registry)
+
+	// Register legacy interfaces for migration scripts.
+	v1bank.RegisterInterfaces(registry)
 }
 
 // AppModule implements an application module for the bank module.
@@ -99,6 +104,9 @@ type AppModule struct {
 
 	keeper        keeper.Keeper
 	accountKeeper types.AccountKeeper
+
+	// legacySubspace is used solely for migration of x/params managed parameters
+	legacySubspace exported.Subspace
 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
@@ -111,15 +119,34 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
+
+	m := keeper.NewMigrator(am.keeper.(keeper.BaseKeeper), am.legacySubspace)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/bank from version 1 to 2: %v", err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 2, m.Migrate2to3); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/bank from version 2 to 3: %v", err))
+	}
+
+	if err := cfg.RegisterMigration(types.ModuleName, 3, m.Migrate3to4); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/bank from version 3 to 4: %v", err))
+	}
 }
 
 // NewAppModule creates a new AppModule object
-func NewAppModule(cdc codec.Codec, keeper keeper.Keeper, accountKeeper types.AccountKeeper) AppModule {
+func NewAppModule(cdc codec.Codec, keeper keeper.Keeper, accountKeeper types.AccountKeeper, ss exported.Subspace) AppModule {
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{cdc: cdc, ac: accountKeeper.AddressCodec()},
 		keeper:         keeper,
 		accountKeeper:  accountKeeper,
+		legacySubspace: ss,
 	}
+}
+
+// RegisterInvariants registers the bank module invariants.
+func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
+	keeper.RegisterInvariants(ir, am.keeper)
 }
 
 // QuerierRoute returns the bank module's querier route name.
@@ -144,6 +171,26 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion implements AppModule/ConsensusVersion.
 func (AppModule) ConsensusVersion() uint64 { return ConsensusVersion }
 
+// BeginBlock returns the begin blocker for the bank module.
+func (am AppModule) BeginBlock(ctx sdk.Context) {
+}
+
+// EndBlock returns the end blocker for the bank module. It returns no validator
+// updates.
+func (am AppModule) EndBlock(ctx context.Context) (err error) {
+	switch k := am.keeper.(type) {
+	case keeper.BaseKeeper:
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		defer k.Meter(ctx).FuncTiming(&sdkCtx, "EndBlocker")(&err)
+	case *keeper.BaseKeeper:
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		defer k.Meter(ctx).FuncTiming(&sdkCtx, "EndBlocker")(&err)
+	}
+
+	am.keeper.EmitAllTransientBalances(ctx)
+	return am.keeper.CreditVirtualAccounts(ctx)
+}
+
 // AppModuleSimulation functions
 
 // GenerateGenesisState creates a randomized GenState of the bank module.
@@ -152,7 +199,6 @@ func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
 }
 
 // ProposalMsgs returns msgs used for governance proposals for simulations.
-// migrate to ProposalMsgsX. This method is ignored when ProposalMsgsX exists and will be removed in the future.
 func (AppModule) ProposalMsgs(simState module.SimulationState) []simtypes.WeightedProposalMsg {
 	return simulation.ProposalMsgs()
 }
@@ -162,27 +208,11 @@ func (am AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
 	sdr[types.StoreKey] = simtypes.NewStoreDecoderFuncFromCollectionsSchema(am.keeper.(keeper.BaseKeeper).Schema)
 }
 
-// WeightedOperations returns the all the bank module operations with their respective weights.
-// migrate to WeightedOperationsX. This method is ignored when WeightedOperationsX exists and will be removed in the future
+// WeightedOperations returns the all the gov module operations with their respective weights.
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	return simulation.WeightedOperations(
 		simState.AppParams, simState.Cdc, simState.TxConfig, am.accountKeeper, am.keeper,
 	)
-}
-
-// ProposalMsgsX registers governance proposal messages in the simulation registry.
-func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_update_params", 100), simulation.MsgUpdateParamsFactory())
-}
-
-// WeightedOperationsX registers weighted bank module operations for simulation.
-func (am AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_send", 100), simulation.MsgSendFactory())
-	reg.Add(weights.Get("msg_multisend", 10), simulation.MsgMultiSendFactory())
-}
-
-func (am AppModule) EndBlock(ctx context.Context) error {
-	return am.keeper.CreditVirtualAccounts(ctx)
 }
 
 // App Wiring Setup
@@ -198,12 +228,17 @@ func init() {
 type ModuleInputs struct {
 	depinject.In
 
-	Config       *modulev1.Module
-	Cdc          codec.Codec
-	StoreService corestore.KVStoreService
-	Logger       log.Logger
+	Config        *modulev1.Module
+	Cdc           codec.Codec
+	StoreService  corestore.KVStoreService
+	TStoreService corestore.TransientStoreService
+	ObjStoreKey   *storetypes.ObjectStoreKey
+	Logger        log.Logger
 
 	AccountKeeper types.AccountKeeper
+
+	// LegacySubspace is used solely for migration of x/params managed parameters
+	LegacySubspace exported.Subspace `optional:"true"`
 }
 
 type ModuleOutputs struct {
@@ -238,12 +273,14 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 	bankKeeper := keeper.NewBaseKeeper(
 		in.Cdc,
 		in.StoreService,
+		in.TStoreService,
+		in.ObjStoreKey,
 		in.AccountKeeper,
 		blockedAddresses,
 		authority.String(),
 		in.Logger,
 	)
-	m := NewAppModule(in.Cdc, bankKeeper, in.AccountKeeper)
+	m := NewAppModule(in.Cdc, bankKeeper, in.AccountKeeper, in.LegacySubspace)
 
 	return ModuleOutputs{BankKeeper: bankKeeper, Module: m}
 }
@@ -257,7 +294,7 @@ func InvokeSetSendRestrictions(
 		return nil
 	}
 
-	modules := slices.Collect(maps.Keys(restrictions))
+	modules := maps.Keys(restrictions)
 	order := config.RestrictionsOrder
 	if len(order) == 0 {
 		order = modules

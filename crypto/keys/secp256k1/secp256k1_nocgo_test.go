@@ -1,4 +1,5 @@
 //go:build !libsecp256k1_sdk
+// +build !libsecp256k1_sdk
 
 package secp256k1
 
@@ -14,7 +15,7 @@ import (
 // Note: run with CGO_ENABLED=0 or go test -tags !cgo.
 func TestSignatureVerificationAndRejectUpperS(t *testing.T) {
 	msg := []byte("We have lingered long enough on the shores of the cosmic ocean.")
-	for range 500 {
+	for i := 0; i < 500; i++ {
 		priv := GenPrivKey()
 		sigStr, err := priv.Sign(msg)
 		require.NoError(t, err)
@@ -29,7 +30,7 @@ func TestSignatureVerificationAndRejectUpperS(t *testing.T) {
 
 		// malleate:
 		var S256 secp256k1.ModNScalar
-		S256.SetByteSlice(secp256k1.S256().N.Bytes()) //nolint:staticcheck // TODO: migrate off deprecated elliptic.Curve (SA1019)
+		S256.SetByteSlice(secp256k1.S256().N.Bytes())
 		s.Negate().Add(&S256)
 		require.True(t, s.IsOverHalfOrder())
 

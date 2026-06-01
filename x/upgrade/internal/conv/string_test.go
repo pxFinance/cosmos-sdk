@@ -25,9 +25,7 @@ func (s *StringSuite) TestUnsafeStrToBytes() {
 	for i := 0; i < 5; i++ {
 		b := unsafeConvertStr()
 		runtime.GC()
-		timer := time.NewTimer(2 * time.Millisecond)
-		<-timer.C
-		timer.Stop()
+		<-time.NewTimer(2 * time.Millisecond).C
 		b2 := append(b, 'd')
 		s.Equal("abc", string(b))
 		s.Equal("abcd", string(b2))
@@ -35,7 +33,7 @@ func (s *StringSuite) TestUnsafeStrToBytes() {
 }
 
 func BenchmarkUnsafeStrToBytes(b *testing.B) {
-	for i := 0; b.Loop(); i++ {
+	for i := 0; i < b.N; i++ {
 		UnsafeStrToBytes(strconv.Itoa(i))
 	}
 }

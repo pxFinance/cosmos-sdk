@@ -4,17 +4,13 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/cosmos/gogoproto/proto"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
-	"cosmossdk.io/depinject"
-	"cosmossdk.io/depinject/appconfig"
 	"cosmossdk.io/math"
+	"cosmossdk.io/simapp"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -23,14 +19,8 @@ import (
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/distribution/client/cli"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
-	"github.com/cosmos/cosmos-sdk/x/genutil"
-	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
-	"github.com/cosmos/cosmos-sdk/x/gov"
-	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
-	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 )
 
@@ -41,35 +31,8 @@ type E2ETestSuite struct {
 	network *network.Network
 }
 
-func NewE2ETestSuite() *E2ETestSuite {
-	return &E2ETestSuite{}
-}
-
-func initNetworkConfig(t *testing.T) network.Config {
-	t.Helper()
-
-	moduleConfig := moduleConfig
-
-	t.Log("setting up the e2e test suite")
-
-	// application configuration (used by depinject)
-	AppConfig := depinject.Configs(appconfig.Compose(&appv1alpha1.Config{
-		Modules: moduleConfig,
-	}),
-		depinject.Supply(
-			// supply custom module basics
-			map[string]module.AppModuleBasic{
-				genutiltypes.ModuleName: genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
-				govtypes.ModuleName: gov.NewAppModuleBasic(
-					[]govclient.ProposalHandler{},
-				),
-			},
-		),
-	)
-
-	cfg, err := network.DefaultConfigWithAppConfig(AppConfig)
-	require.NoError(t, err)
-	return cfg
+func NewE2ETestSuite(cfg network.Config) *E2ETestSuite {
+	return &E2ETestSuite{cfg: cfg}
 }
 
 // SetupSuite creates a new network for _each_ e2e test. We create a new
@@ -79,8 +42,7 @@ func initNetworkConfig(t *testing.T) network.Config {
 func (s *E2ETestSuite) SetupSuite() {
 	s.T().Log("setting up e2e test suite")
 
-	cfg := initNetworkConfig(s.T())
-
+	cfg := network.DefaultConfig(simapp.NewTestNetworkFixture)
 	cfg.NumValidators = 1
 	s.cfg = cfg
 
@@ -104,7 +66,7 @@ func (s *E2ETestSuite) SetupSuite() {
 	s.Require().NoError(s.network.WaitForNextBlock())
 }
 
-// TearDownSuite cleans up the current test network after _each_ test.
+// TearDownSuite cleans up the curret test network after _each_ test.
 func (s *E2ETestSuite) TearDownSuite() {
 	s.T().Log("tearing down e2e test suite1")
 	s.network.Cleanup()
@@ -167,6 +129,8 @@ func (s *E2ETestSuite) TestNewWithdrawRewardsCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			clientCtx := val.ClientCtx
 
@@ -260,6 +224,8 @@ func (s *E2ETestSuite) TestNewWithdrawAllRewardsCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			cmd := cli.NewWithdrawAllRewardsCmd(address.NewBech32Codec("cosmosvaloper"), address.NewBech32Codec("cosmos"))
 			clientCtx := val.ClientCtx
@@ -343,6 +309,8 @@ func (s *E2ETestSuite) TestNewSetWithdrawAddrCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			cmd := cli.NewSetWithdrawAddrCmd(address.NewBech32Codec("cosmos"))
 			clientCtx := val.ClientCtx
@@ -396,6 +364,8 @@ func (s *E2ETestSuite) TestNewFundCommunityPoolCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			cmd := cli.NewFundCommunityPoolCmd(address.NewBech32Codec("cosmos"))
 			clientCtx := val.ClientCtx

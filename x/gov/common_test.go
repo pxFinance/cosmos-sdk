@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	sdklog "cosmossdk.io/log/v2"
+	sdklog "cosmossdk.io/log"
 	"cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
@@ -30,6 +30,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	"github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -44,8 +45,6 @@ var (
 
 // mkTestLegacyContent creates a MsgExecLegacyContent for testing purposes.
 func mkTestLegacyContent(t *testing.T) *v1.MsgExecLegacyContent {
-	t.Helper()
-
 	msgContent, err := v1.NewLegacyContent(TestProposal, authtypes.NewModuleAddress(types.ModuleName).String())
 	require.NoError(t, err)
 
@@ -114,13 +113,12 @@ type suite struct {
 }
 
 func createTestSuite(t *testing.T) suite {
-	t.Helper()
-
 	res := suite{}
 
 	app, err := simtestutil.SetupWithConfiguration(
 		depinject.Configs(
 			configurator.NewAppConfig(
+				configurator.ParamsModule(),
 				configurator.AuthModule(),
 				configurator.StakingModule(),
 				configurator.BankModule(),
@@ -131,11 +129,7 @@ func createTestSuite(t *testing.T) suite {
 			depinject.Supply(sdklog.NewNopLogger()),
 		),
 		simtestutil.DefaultStartUpConfig(),
-		&res.AccountKeeper,
-		&res.BankKeeper,
-		&res.GovKeeper,
-		&res.DistributionKeeper,
-		&res.StakingKeeper,
+		&res.AccountKeeper, &res.BankKeeper, &res.GovKeeper, &res.DistributionKeeper, &res.StakingKeeper,
 	)
 	require.NoError(t, err)
 

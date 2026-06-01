@@ -14,20 +14,21 @@ import (
 
 var _ types.StakingHooks = Hooks{}
 
-// Hooks is a wrapper struct for slashing keeper
+// Hooks wrapper struct for slashing keeper
 type Hooks struct {
 	k Keeper
 }
 
-// Hooks returns the slashing hooks
+// Return the slashing hooks
 func (k Keeper) Hooks() Hooks {
 	return Hooks{k}
 }
 
 // AfterValidatorBonded updates the signing info start height or create a new signing info
-func (h Hooks) AfterValidatorBonded(ctx context.Context, consAddr sdk.ConsAddress, valAddr sdk.ValAddress) error {
+func (h Hooks) AfterValidatorBonded(ctx context.Context, consAddr sdk.ConsAddress, valAddr sdk.ValAddress) (err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	signingInfo, err := h.k.GetValidatorSigningInfo(ctx, consAddr)
+	defer h.k.Meter(ctx).FuncTiming(&sdkCtx, "AfterValidatorBonded")(&err)
+	signingInfo, err := h.k.GetValidatorSigningInfo(sdkCtx, consAddr)
 	if err == nil {
 		signingInfo.StartHeight = sdkCtx.BlockHeight()
 	} else {
@@ -41,18 +42,22 @@ func (h Hooks) AfterValidatorBonded(ctx context.Context, consAddr sdk.ConsAddres
 		)
 	}
 
-	return h.k.SetValidatorSigningInfo(ctx, consAddr, signingInfo)
+	return h.k.SetValidatorSigningInfo(sdkCtx, consAddr, signingInfo)
 }
 
 // AfterValidatorRemoved deletes the address-pubkey relation when a validator is removed,
-func (h Hooks) AfterValidatorRemoved(ctx context.Context, consAddr sdk.ConsAddress, _ sdk.ValAddress) error {
-	return h.k.deleteAddrPubkeyRelation(ctx, crypto.Address(consAddr))
+func (h Hooks) AfterValidatorRemoved(ctx context.Context, consAddr sdk.ConsAddress, _ sdk.ValAddress) (err error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defer h.k.Meter(ctx).FuncTiming(&sdkCtx, "AfterValidatorRemoved")(&err)
+
+	return h.k.deleteAddrPubkeyRelation(sdkCtx, crypto.Address(consAddr))
 }
 
 // AfterValidatorCreated adds the address-pubkey relation when a validator is created.
-func (h Hooks) AfterValidatorCreated(ctx context.Context, valAddr sdk.ValAddress) error {
+func (h Hooks) AfterValidatorCreated(ctx context.Context, valAddr sdk.ValAddress) (err error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	validator, err := h.k.sk.Validator(ctx, valAddr)
+	defer h.k.Meter(ctx).FuncTiming(&sdkCtx, "AfterValidatorCreated")(&err)
+	validator, err := h.k.sk.Validator(sdkCtx, valAddr)
 	if err != nil {
 		return err
 	}

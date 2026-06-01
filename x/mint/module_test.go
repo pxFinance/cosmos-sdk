@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
@@ -25,7 +25,7 @@ func TestItCreatesModuleAccountOnInitBlock(t *testing.T) {
 		), &accountKeeper)
 	require.NoError(t, err)
 
-	ctx := app.NewContext(false)
+	ctx := app.BaseApp.NewContext(false)
 	acc := accountKeeper.GetAccount(ctx, authtypes.NewModuleAddress(types.ModuleName))
 	require.NotNil(t, acc)
 }

@@ -7,8 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"cosmossdk.io/x/upgrade/types"
+
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 func mustParseTime(s string) time.Time {
@@ -41,6 +42,7 @@ func TestPlanString(t *testing.T) {
 	}
 
 	for name, tc := range cases {
+		tc := tc // copy to local variable for scopelint
 		t.Run(name, func(t *testing.T) {
 			s := tc.p.String()
 			require.Equal(t, tc.expect, s)
@@ -91,6 +93,7 @@ func TestPlanValid(t *testing.T) {
 	}
 
 	for name, tc := range cases {
+		tc := tc // copy to local variable for scopelint
 		t.Run(name, func(t *testing.T) {
 			err := tc.p.ValidateBasic()
 			if tc.valid {
@@ -139,6 +142,7 @@ func TestShouldExecute(t *testing.T) {
 	}
 
 	for name, tc := range cases {
+		tc := tc // copy to local variable for scopelint
 		t.Run(name, func(t *testing.T) {
 			should := tc.p.ShouldExecute(tc.ctxHeight)
 			assert.Equal(t, tc.expected, should)

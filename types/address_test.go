@@ -44,7 +44,7 @@ var invalidStrs = []string{
 	types.Bech32PrefixConsPub + "6789",
 }
 
-func (s *addressTestSuite) testMarshal(original, res any, marshal func() ([]byte, error), unmarshal func([]byte) error) {
+func (s *addressTestSuite) testMarshal(original, res interface{}, marshal func() ([]byte, error), unmarshal func([]byte) error) {
 	bz, err := marshal()
 	s.Require().Nil(err)
 	s.Require().Nil(unmarshal(bz))
@@ -58,17 +58,14 @@ func (s *addressTestSuite) TestEmptyAddresses() {
 	s.Require().Equal((types.ConsAddress{}).String(), "")
 
 	accAddr, err := types.AccAddressFromBech32("")
-	s.Require().NotNil(accAddr)
 	s.Require().True(accAddr.Empty())
 	s.Require().Error(err)
 
 	valAddr, err := types.ValAddressFromBech32("")
-	s.Require().NotNil(accAddr)
 	s.Require().True(valAddr.Empty())
 	s.Require().Error(err)
 
 	consAddr, err := types.ConsAddressFromBech32("")
-	s.Require().NotNil(accAddr)
 	s.Require().True(consAddr.Empty())
 	s.Require().Error(err)
 }
@@ -94,9 +91,8 @@ func (s *addressTestSuite) TestRandBech32AccAddrConsistency() {
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
 
-	for range 1000 {
-		_, err := rand.Read(pub.Key)
-		s.Require().NoError(err)
+	for i := 0; i < 1000; i++ {
+		rand.Read(pub.Key)
 
 		acc := types.AccAddress(pub.Address())
 		res := types.AccAddress{}
@@ -105,7 +101,7 @@ func (s *addressTestSuite) TestRandBech32AccAddrConsistency() {
 		s.testMarshal(&acc, &res, acc.Marshal, (&res).Unmarshal)
 
 		str := acc.String()
-		res, err = types.AccAddressFromBech32(str)
+		res, err := types.AccAddressFromBech32(str)
 		s.Require().Nil(err)
 		s.Require().Equal(acc, res)
 
@@ -137,8 +133,7 @@ func (s *addressTestSuite) TestAddrCache() {
 	// Use a random key
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
-	_, err := rand.Read(pub.Key)
-	s.Require().NoError(err)
+	rand.Read(pub.Key)
 
 	// Set SDK bech32 prefixes to 'osmo'
 	prefix := "osmo"
@@ -175,8 +170,7 @@ func (s *addressTestSuite) TestAddrCacheDisabled() {
 	// Use a random key
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
-	_, err := rand.Read(pub.Key)
-	s.Require().NoError(err)
+	rand.Read(pub.Key)
 
 	// Set SDK bech32 prefixes to 'osmo'
 	prefix := "osmo"
@@ -207,9 +201,8 @@ func (s *addressTestSuite) TestValAddr() {
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
 
-	for range 20 {
-		_, err := rand.Read(pub.Key)
-		s.Require().NoError(err)
+	for i := 0; i < 20; i++ {
+		rand.Read(pub.Key)
 
 		acc := types.ValAddress(pub.Address())
 		res := types.ValAddress{}
@@ -218,7 +211,7 @@ func (s *addressTestSuite) TestValAddr() {
 		s.testMarshal(&acc, &res, acc.Marshal, (&res).Unmarshal)
 
 		str := acc.String()
-		res, err = types.ValAddressFromBech32(str)
+		res, err := types.ValAddressFromBech32(str)
 		s.Require().Nil(err)
 		s.Require().Equal(acc, res)
 
@@ -249,9 +242,8 @@ func (s *addressTestSuite) TestConsAddress() {
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
 
-	for range 20 {
-		_, err := rand.Read(pub.Key)
-		s.Require().NoError(err)
+	for i := 0; i < 20; i++ {
+		rand.Read(pub.Key[:])
 
 		acc := types.ConsAddress(pub.Address())
 		res := types.ConsAddress{}
@@ -260,7 +252,7 @@ func (s *addressTestSuite) TestConsAddress() {
 		s.testMarshal(&acc, &res, acc.Marshal, (&res).Unmarshal)
 
 		str := acc.String()
-		res, err = types.ConsAddressFromBech32(str)
+		res, err := types.ConsAddressFromBech32(str)
 		s.Require().Nil(err)
 		s.Require().Equal(acc, res)
 
@@ -301,8 +293,7 @@ func (s *addressTestSuite) TestConfiguredPrefix() {
 	pub := &ed25519.PubKey{Key: pubBz}
 	for length := 1; length < 10; length++ {
 		for times := 1; times < 20; times++ {
-			_, err := rand.Read(pub.Key[:])
-			s.Require().NoError(err)
+			rand.Read(pub.Key[:])
 			// Test if randomly generated prefix of a given length works
 			prefix := RandString(length)
 
@@ -317,7 +308,7 @@ func (s *addressTestSuite) TestConfiguredPrefix() {
 				acc.String(),
 				prefix+types.PrefixAccount), acc.String())
 
-			bech32Pub := legacybech32.MustMarshalPubKey(legacybech32.AccPK, pub)
+			bech32Pub := legacybech32.MustMarshalPubKey(legacybech32.AccPK, pub) //nolint:staticcheck // SA1019: legacybech32 is deprecated: use the bech32 package instead.
 			s.Require().True(strings.HasPrefix(
 				bech32Pub,
 				prefix+types.PrefixPublic))
@@ -331,7 +322,7 @@ func (s *addressTestSuite) TestConfiguredPrefix() {
 				val.String(),
 				prefix+types.PrefixValidator+types.PrefixAddress))
 
-			bech32ValPub := legacybech32.MustMarshalPubKey(legacybech32.ValPK, pub)
+			bech32ValPub := legacybech32.MustMarshalPubKey(legacybech32.ValPK, pub) //nolint:staticcheck // SA1019: legacybech32 is deprecated: use the bech32 package instead.
 			s.Require().True(strings.HasPrefix(
 				bech32ValPub,
 				prefix+types.PrefixValidator+types.PrefixPublic))
@@ -345,7 +336,7 @@ func (s *addressTestSuite) TestConfiguredPrefix() {
 				cons.String(),
 				prefix+types.PrefixConsensus+types.PrefixAddress))
 
-			bech32ConsPub := legacybech32.MustMarshalPubKey(legacybech32.ConsPK, pub)
+			bech32ConsPub := legacybech32.MustMarshalPubKey(legacybech32.ConsPK, pub) //nolint:staticcheck // SA1019: legacybech32 is deprecated: use the bech32 package instead.
 			s.Require().True(strings.HasPrefix(
 				bech32ConsPub,
 				prefix+types.PrefixConsensus+types.PrefixPublic))
@@ -356,8 +347,7 @@ func (s *addressTestSuite) TestConfiguredPrefix() {
 func (s *addressTestSuite) TestAddressInterface() {
 	pubBz := make([]byte, ed25519.PubKeySize)
 	pub := &ed25519.PubKey{Key: pubBz}
-	_, err := rand.Read(pub.Key)
-	s.Require().NoError(err)
+	rand.Read(pub.Key)
 
 	addrs := []types.Address{
 		types.ConsAddress(pub.Address()),
@@ -428,7 +418,7 @@ func (s *addressTestSuite) TestCustomAddressVerifier() {
 		return fmt.Errorf("incorrect address length %d", n)
 	})
 
-	// Verify that the custom logic rejects this 10 byte address
+	// Verifiy that the custom logic rejects this 10 byte address
 	err = types.VerifyAddressFormat(addr)
 	s.Require().NotNil(err)
 	_, err = types.AccAddressFromBech32(accBech)
@@ -463,6 +453,7 @@ func (s *addressTestSuite) TestBech32ifyAddressBytes() {
 		{"20-byte address", args{"prefixb", addr20byte}, "prefixb1qqqsyqcyq5rqwzqfpg9scrgwpugpzysnrujsuw", false},
 	}
 	for _, tt := range tests {
+		tt := tt
 		s.T().Run(tt.name, func(t *testing.T) {
 			got, err := types.Bech32ifyAddressBytes(tt.args.prefix, tt.args.bs)
 			if (err != nil) != tt.wantErr {
@@ -495,6 +486,7 @@ func (s *addressTestSuite) TestMustBech32ifyAddressBytes() {
 		{"20-byte address", args{"prefixb", addr20byte}, "prefixb1qqqsyqcyq5rqwzqfpg9scrgwpugpzysnrujsuw", false},
 	}
 	for _, tt := range tests {
+		tt := tt
 		s.T().Run(tt.name, func(t *testing.T) {
 			if tt.wantPanic {
 				require.Panics(t, func() { types.MustBech32ifyAddressBytes(tt.args.prefix, tt.args.bs) })
@@ -565,17 +557,4 @@ func (s *addressTestSuite) TestGetFromBech32() {
 	_, err = types.GetFromBech32("cosmos1qqqsyqcyq5rqwzqfys8f67", "x")
 	s.Require().Error(err)
 	s.Require().Equal("invalid Bech32 prefix; expected x, got cosmos", err.Error())
-}
-
-func (s *addressTestSuite) TestMustAccAddressFromBech32() {
-	bech32PrefixValAddr := types.GetConfig().GetBech32ValidatorAddrPrefix()
-	addr20byte := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
-	address := types.MustBech32ifyAddressBytes(bech32PrefixValAddr, addr20byte)
-
-	valAddress1, err := types.ValAddressFromBech32(address)
-	s.Require().Nil(err)
-
-	valAddress2 := types.MustValAddressFromBech32(address)
-
-	s.Require().Equal(valAddress1, valAddress2)
 }

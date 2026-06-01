@@ -2,16 +2,16 @@ package baseapp
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cast"
 
+	"cosmossdk.io/store/streaming"
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/streaming"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 )
 
 const (
@@ -48,7 +48,7 @@ func (app *BaseApp) RegisterStreamingServices(appOpts servertypes.AppOptions, ke
 func (app *BaseApp) registerStreamingPlugin(
 	appOpts servertypes.AppOptions,
 	keys map[string]*storetypes.KVStoreKey,
-	streamingPlugin any,
+	streamingPlugin interface{},
 ) error {
 	v, ok := streamingPlugin.(storetypes.ABCIListener)
 	if !ok {
@@ -80,7 +80,12 @@ func (app *BaseApp) registerABCIListenerPlugin(
 }
 
 func exposeAll(list []string) bool {
-	return slices.Contains(list, "*")
+	for _, ele := range list {
+		if ele == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func exposeStoreKeysSorted(keysStr []string, keys map[string]*storetypes.KVStoreKey) []storetypes.StoreKey {

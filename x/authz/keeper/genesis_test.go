@@ -4,18 +4,18 @@ import (
 	"testing"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
-	"go.uber.org/mock/gomock"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
@@ -82,7 +82,7 @@ func (suite *GenesisTestSuite) TestImportExportGenesis() {
 
 	// TODO, recheck!
 	// Clear keeper
-	suite.Require().NoError(suite.keeper.DeleteGrant(suite.ctx, granteeAddr, granterAddr, grant.MsgTypeURL()))
+	suite.keeper.DeleteGrant(suite.ctx, granteeAddr, granterAddr, grant.MsgTypeURL())
 	newGenesis := suite.keeper.ExportGenesis(suite.ctx)
 	suite.Require().NotEqual(genesis, newGenesis)
 	suite.Require().Empty(newGenesis)

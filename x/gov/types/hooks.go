@@ -9,17 +9,17 @@ import (
 
 var _ GovHooks = MultiGovHooks{}
 
-// MultiGovHooks combines multiple governance hooks, all hook functions are run in array sequence
+// combine multiple governance hooks, all hook functions are run in array sequence
 type MultiGovHooks []GovHooks
 
 func NewMultiGovHooks(hooks ...GovHooks) MultiGovHooks {
 	return hooks
 }
 
-func (h MultiGovHooks) AfterProposalSubmission(ctx context.Context, proposalID uint64, proposerAddr sdk.AccAddress) error {
+func (h MultiGovHooks) AfterProposalSubmission(ctx context.Context, proposalID uint64) error {
 	var errs error
 	for i := range h {
-		errs = errors.Join(errs, h[i].AfterProposalSubmission(ctx, proposalID, proposerAddr))
+		errs = errors.Join(errs, h[i].AfterProposalSubmission(ctx, proposalID))
 	}
 
 	return errs

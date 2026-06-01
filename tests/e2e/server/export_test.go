@@ -1,4 +1,5 @@
 //go:build e2e
+// +build e2e
 
 package server_test
 
@@ -7,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -16,9 +18,8 @@ import (
 	"github.com/spf13/cobra"
 	"gotest.tools/v3/assert"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 	"cosmossdk.io/simapp"
-
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -94,12 +95,10 @@ func TestExportCmd_Height(t *testing.T) {
 
 			// Fast forward to block `tc.fastForward`.
 			for i := int64(2); i <= tc.fastForward; i++ {
-				_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+				app.FinalizeBlock(&abci.FinalizeBlockRequest{
 					Height: i,
 				})
-				assert.NilError(t, err)
-				_, err = app.Commit()
-				assert.NilError(t, err)
+				app.Commit()
 			}
 
 			output := &bytes.Buffer{}
@@ -161,7 +160,7 @@ func setupApp(t *testing.T, tempDir string) (*simapp.SimApp, context.Context, ge
 	assert.NilError(t, err)
 
 	db := dbm.NewMemDB()
-	app := simapp.NewSimApp(logger, db, true, simtestutil.NewAppOptionsWithFlagHome(tempDir))
+	app := simapp.NewSimApp(logger, db, nil, true, simtestutil.NewAppOptionsWithFlagHome(tempDir))
 
 	genesisState := simapp.GenesisStateWithSingleValidator(t, app)
 	stateBytes, err := json.MarshalIndent(genesisState, "", " ")
@@ -183,31 +182,27 @@ func setupApp(t *testing.T, tempDir string) (*simapp.SimApp, context.Context, ge
 	err = genutil.ExportGenesisFile(&appGenesis, serverCtx.Config.GenesisFile())
 	assert.NilError(t, err)
 
-	_, err = app.InitChain(&abci.RequestInitChain{
+	app.InitChain(&abci.InitChainRequest{
 		Validators:      []abci.ValidatorUpdate{},
 		ConsensusParams: simtestutil.DefaultConsensusParams,
 		AppStateBytes:   appGenesis.AppState,
-	})
-	assert.NilError(t, err)
-
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	},
+	)
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: 1,
 	})
-	assert.NilError(t, err)
-
-	_, err = app.Commit()
-	assert.NilError(t, err)
+	app.Commit()
 
 	cmd := server.ExportCmd(
-		func(_ log.Logger, _ dbm.DB, height int64, forZeroHeight bool, jailAllowedAddrs []string, appOptions types.AppOptions, modulesToExport []string) (types.ExportedApp, error) {
+		func(_ log.Logger, _ dbm.DB, _ io.Writer, height int64, forZeroHeight bool, jailAllowedAddrs []string, appOptions types.AppOptions, modulesToExport []string) (types.ExportedApp, error) {
 			var simApp *simapp.SimApp
 			if height != -1 {
-				simApp = simapp.NewSimApp(logger, db, false, appOptions)
+				simApp = simapp.NewSimApp(logger, db, nil, false, appOptions)
 				if err := simApp.LoadHeight(height); err != nil {
 					return types.ExportedApp{}, err
 				}
 			} else {
-				simApp = simapp.NewSimApp(logger, db, true, appOptions)
+				simApp = simapp.NewSimApp(logger, db, nil, true, appOptions)
 			}
 
 			return simApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)

@@ -6,26 +6,26 @@ import (
 	"fmt"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
-	"go.uber.org/mock/gomock"
 
 	"cosmossdk.io/collections"
+	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/x/evidence"
+	"cosmossdk.io/x/evidence/exported"
+	"cosmossdk.io/x/evidence/keeper"
+	evidencetestutil "cosmossdk.io/x/evidence/testutil"
+	"cosmossdk.io/x/evidence/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
-	"github.com/cosmos/cosmos-sdk/x/evidence"
-	"github.com/cosmos/cosmos-sdk/x/evidence/exported"
-	"github.com/cosmos/cosmos-sdk/x/evidence/keeper"
-	evidencetestutil "github.com/cosmos/cosmos-sdk/x/evidence/testutil"
-	"github.com/cosmos/cosmos-sdk/x/evidence/types"
 )
 
 var (
@@ -77,7 +77,7 @@ type KeeperTestSuite struct {
 	accountKeeper  *evidencetestutil.MockAccountKeeper
 	slashingKeeper *evidencetestutil.MockSlashingKeeper
 	stakingKeeper  *evidencetestutil.MockStakingKeeper
-	blockInfo      *evidencetestutil.MockCometInfo
+	blockInfo      *evidencetestutil.MockCometinfo
 	queryClient    types.QueryClient
 	encCfg         moduletestutil.TestEncodingConfig
 	msgServer      types.MsgServer
@@ -97,7 +97,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 	slashingKeeper := evidencetestutil.NewMockSlashingKeeper(ctrl)
 	accountKeeper := evidencetestutil.NewMockAccountKeeper(ctrl)
 	bankKeeper := evidencetestutil.NewMockBankKeeper(ctrl)
-	suite.blockInfo = &evidencetestutil.MockCometInfo{}
+	suite.blockInfo = &evidencetestutil.MockCometinfo{}
 
 	evidenceKeeper := keeper.NewKeeper(
 		encCfg.Codec,
@@ -105,7 +105,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 		stakingKeeper,
 		slashingKeeper,
 		address.NewBech32Codec("cosmos"),
-		&evidencetestutil.MockCometInfo{},
+		&evidencetestutil.MockCometinfo{},
 	)
 
 	suite.stakingKeeper = stakingKeeper

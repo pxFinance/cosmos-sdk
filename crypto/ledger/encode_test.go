@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,9 +9,7 @@ import (
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 )
 
-func checkAminoJSON(t *testing.T, src, dst any, isNil bool) {
-	t.Helper()
-
+func checkAminoJSON(t *testing.T, src, dst interface{}, isNil bool) {
 	// Marshal to JSON bytes.
 	js, err := cdc.MarshalJSON(src)
 	require.Nil(t, err, "%+v", err)
@@ -25,8 +24,7 @@ func checkAminoJSON(t *testing.T, src, dst any, isNil bool) {
 	require.Nil(t, err, "%+v", err)
 }
 
-/*
-func ExamplePrintRegisteredTypes() { //nolint:govet // ignore for examples
+func Example() {
 	_ = cdc.PrintTypes(os.Stdout)
 	// | Type | Name | Prefix | Length | Notes |
 	// | ---- | ---- | ------ | ----- | ------ |
@@ -39,7 +37,6 @@ func ExamplePrintRegisteredTypes() { //nolint:govet // ignore for examples
 	// | PrivKey | tendermint/PrivKeySr25519 | 0x2F82D78B | variable |  |
 	// | PrivKey | tendermint/PrivKeySecp256k1 | 0xE1B0F79B | variable |  |
 }
-*/
 
 func TestNilEncodings(t *testing.T) {
 	// Check nil Signature.

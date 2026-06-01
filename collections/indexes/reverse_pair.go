@@ -7,21 +7,6 @@ import (
 	"cosmossdk.io/collections/codec"
 )
 
-type reversePairOptions struct {
-	uncheckedValue bool
-}
-
-// WithReversePairUncheckedValue is an option that can be passed to NewReversePair to
-// ignore index values different from '[]byte{}' and continue with the operation.
-// This should be used only if you are migrating to collections and have used a different
-// placeholder value in your storage index keys.
-// Refer to WithKeySetUncheckedValue for more information.
-func WithReversePairUncheckedValue() func(*reversePairOptions) {
-	return func(o *reversePairOptions) {
-		o.uncheckedValue = true
-	}
-}
-
 // ReversePair is an index that is used with collections.Pair keys. It indexes objects by their second part of the key.
 // When the value is being indexed by collections.IndexedMap then ReversePair will create a relationship between
 // the second part of the primary key and the first part.
@@ -46,34 +31,10 @@ func NewReversePair[Value, K1, K2 any](
 	prefix collections.Prefix,
 	name string,
 	pairCodec codec.KeyCodec[collections.Pair[K1, K2]],
-	options ...func(*reversePairOptions),
 ) *ReversePair[K1, K2, Value] {
 	pkc := pairCodec.(pairKeyCodec[K1, K2])
-	o := new(reversePairOptions)
-	for _, option := range options {
-		option(o)
-	}
-	if o.uncheckedValue {
-		return &ReversePair[K1, K2, Value]{
-			refKeys: collections.NewKeySet(
-				sb,
-				prefix,
-				name,
-				collections.PairKeyCodec(pkc.KeyCodec2(), pkc.KeyCodec1()),
-				collections.WithKeySetUncheckedValue(),
-				collections.WithKeySetSecondaryIndex(),
-			),
-		}
-	}
-
 	mi := &ReversePair[K1, K2, Value]{
-		refKeys: collections.NewKeySet(
-			sb,
-			prefix,
-			name,
-			collections.PairKeyCodec(pkc.KeyCodec2(), pkc.KeyCodec1()),
-			collections.WithKeySetSecondaryIndex(),
-		),
+		refKeys: collections.NewKeySet(sb, prefix, name, collections.PairKeyCodec(pkc.KeyCodec2(), pkc.KeyCodec1())),
 	}
 
 	return mi
@@ -83,7 +44,7 @@ func NewReversePair[Value, K1, K2 any](
 func (i *ReversePair[K1, K2, Value]) Iterate(ctx context.Context, ranger collections.Ranger[collections.Pair[K2, K1]]) (iter ReversePairIterator[K2, K1], err error) {
 	sIter, err := i.refKeys.Iterate(ctx, ranger)
 	if err != nil {
-		return iter, err
+		return
 	}
 	return (ReversePairIterator[K2, K1])(sIter), nil
 }
@@ -142,11 +103,7 @@ func (m ReversePairIterator[K2, K1]) PrimaryKey() (pair collections.Pair[K1, K2]
 
 // PrimaryKeys returns all the primary keys contained in the iterator.
 func (m ReversePairIterator[K2, K1]) PrimaryKeys() (pairs []collections.Pair[K1, K2], err error) {
-	defer func() {
-		if cerr := m.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer m.Close()
 	for ; m.Valid(); m.Next() {
 		pair, err := m.PrimaryKey()
 		if err != nil {
@@ -154,7 +111,7 @@ func (m ReversePairIterator[K2, K1]) PrimaryKeys() (pairs []collections.Pair[K1,
 		}
 		pairs = append(pairs, pair)
 	}
-	return pairs, nil
+	return pairs, err
 }
 
 func (m ReversePairIterator[K2, K1]) FullKey() (p collections.Pair[K2, K1], err error) {

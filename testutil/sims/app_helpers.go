@@ -6,8 +6,8 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 
@@ -26,7 +26,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -48,12 +47,6 @@ var DefaultConsensusParams = &cmtproto.ConsensusParams{
 		PubKeyTypes: []string{
 			cmttypes.ABCIPubKeyTypeEd25519,
 		},
-	},
-	// Authority sets the consensus-level authority that overrides per-keeper
-	// authority for module parameter updates. Tests that need a different
-	// authority should override this field or use custom consensus params.
-	Authority: &cmtproto.AuthorityParams{
-		Authority: sdk.MustBech32ifyAddressBytes(sdk.Bech32MainPrefix, authtypes.NewModuleAddress(govtypes.ModuleName)),
 	},
 }
 
@@ -103,13 +96,13 @@ func DefaultStartUpConfig() StartupConfig {
 
 // Setup initializes a new runtime.App and can inject values into extraOutputs.
 // It uses SetupWithConfiguration under the hood.
-func Setup(appConfig depinject.Config, extraOutputs ...any) (*runtime.App, error) {
+func Setup(appConfig depinject.Config, extraOutputs ...interface{}) (*runtime.App, error) {
 	return SetupWithConfiguration(appConfig, DefaultStartUpConfig(), extraOutputs...)
 }
 
 // SetupAtGenesis initializes a new runtime.App at genesis and can inject values into extraOutputs.
 // It uses SetupWithConfiguration under the hood.
-func SetupAtGenesis(appConfig depinject.Config, extraOutputs ...any) (*runtime.App, error) {
+func SetupAtGenesis(appConfig depinject.Config, extraOutputs ...interface{}) (*runtime.App, error) {
 	cfg := DefaultStartUpConfig()
 	cfg.AtGenesis = true
 	return SetupWithConfiguration(appConfig, cfg, extraOutputs...)
@@ -117,7 +110,7 @@ func SetupAtGenesis(appConfig depinject.Config, extraOutputs ...any) (*runtime.A
 
 // NextBlock starts a new block.
 func NextBlock(app *runtime.App, ctx sdk.Context, jumpTime time.Duration) (sdk.Context, error) {
-	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: ctx.BlockHeight(), Time: ctx.BlockTime()})
+	_, err := app.FinalizeBlock(&abci.FinalizeBlockRequest{Height: ctx.BlockHeight(), Time: ctx.BlockTime()})
 	if err != nil {
 		return sdk.Context{}, err
 	}
@@ -132,18 +125,22 @@ func NextBlock(app *runtime.App, ctx sdk.Context, jumpTime time.Duration) (sdk.C
 	header.Time = newBlockTime
 	header.Height++
 
-	newCtx := app.BaseApp.NewNextBlockContext(header).WithHeaderInfo(coreheader.Info{
+	newCtx := app.BaseApp.NewUncachedContext(false, header).WithHeaderInfo(coreheader.Info{
 		Height: header.Height,
 		Time:   header.Time,
 	})
 
-	return newCtx, nil
+	if err != nil {
+		return sdk.Context{}, err
+	}
+
+	return newCtx, err
 }
 
 // SetupWithConfiguration initializes a new runtime.App. A Nop logger is set in runtime.App.
 // appConfig defines the application configuration (f.e. app_config.go).
 // extraOutputs defines the extra outputs to be assigned by the dependency injector (depinject).
-func SetupWithConfiguration(appConfig depinject.Config, startupConfig StartupConfig, extraOutputs ...any) (*runtime.App, error) {
+func SetupWithConfiguration(appConfig depinject.Config, startupConfig StartupConfig, extraOutputs ...interface{}) (*runtime.App, error) {
 	// create the app with depinject
 	var (
 		app        *runtime.App
@@ -156,9 +153,9 @@ func SetupWithConfiguration(appConfig depinject.Config, startupConfig StartupCon
 	}
 
 	if startupConfig.BaseAppOption != nil {
-		app = appBuilder.Build(startupConfig.DB, startupConfig.BaseAppOption)
+		app = appBuilder.Build(startupConfig.DB, nil, startupConfig.BaseAppOption)
 	} else {
-		app = appBuilder.Build(startupConfig.DB)
+		app = appBuilder.Build(startupConfig.DB, nil)
 	}
 	if err := app.Load(true); err != nil {
 		return nil, fmt.Errorf("failed to load app: %w", err)
@@ -191,7 +188,7 @@ func SetupWithConfiguration(appConfig depinject.Config, startupConfig StartupCon
 	}
 
 	// init chain will set the validator set and initialize the genesis accounts
-	_, err = app.InitChain(&abci.RequestInitChain{
+	_, err = app.InitChain(&abci.InitChainRequest{
 		Validators:      []abci.ValidatorUpdate{},
 		ConsensusParams: DefaultConsensusParams,
 		AppStateBytes:   stateBytes,
@@ -202,7 +199,7 @@ func SetupWithConfiguration(appConfig depinject.Config, startupConfig StartupCon
 
 	// commit genesis changes
 	if !startupConfig.AtGenesis {
-		_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+		_, err = app.FinalizeBlock(&abci.FinalizeBlockRequest{
 			Height:             app.LastBlockHeight() + 1,
 			NextValidatorsHash: valSet.Hash(),
 		})
@@ -292,17 +289,17 @@ func GenesisStateWithValSet(
 type EmptyAppOptions struct{}
 
 // Get implements AppOptions
-func (ao EmptyAppOptions) Get(o string) any {
+func (ao EmptyAppOptions) Get(o string) interface{} {
 	return nil
 }
 
 // AppOptionsMap is a stub implementing AppOptions which can get data from a map
-type AppOptionsMap map[string]any
+type AppOptionsMap map[string]interface{}
 
-func (m AppOptionsMap) Get(key string) any {
+func (m AppOptionsMap) Get(key string) interface{} {
 	v, ok := m[key]
 	if !ok {
-		return any(nil)
+		return interface{}(nil)
 	}
 
 	return v

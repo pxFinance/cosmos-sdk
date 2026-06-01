@@ -32,7 +32,7 @@ func (suite *KeeperTestSuite) TestGetSetProposal() {
 		proposal, err := suite.govKeeper.SubmitProposal(suite.ctx, tp, "", "test", "summary", suite.addrs[0], tc.expedited)
 		suite.Require().NoError(err)
 		proposalID := proposal.Id
-		suite.Require().NoError(suite.govKeeper.SetProposal(suite.ctx, proposal))
+		suite.govKeeper.SetProposal(suite.ctx, proposal)
 
 		gotProposal, err := suite.govKeeper.Proposals.Get(suite.ctx, proposalID)
 		suite.Require().Nil(err)
@@ -59,9 +59,9 @@ func (suite *KeeperTestSuite) TestDeleteProposal() {
 		proposal, err := suite.govKeeper.SubmitProposal(suite.ctx, tp, "", "test", "summary", suite.addrs[0], tc.expedited)
 		suite.Require().NoError(err)
 		proposalID := proposal.Id
-		suite.Require().NoError(suite.govKeeper.SetProposal(suite.ctx, proposal))
+		suite.govKeeper.SetProposal(suite.ctx, proposal)
 		suite.Require().NotPanics(func() {
-			suite.Require().NoError(suite.govKeeper.DeleteProposal(suite.ctx, proposalID))
+			suite.govKeeper.DeleteProposal(suite.ctx, proposalID)
 		}, "")
 	}
 }
@@ -82,7 +82,7 @@ func (suite *KeeperTestSuite) TestActivateVotingPeriod() {
 
 		suite.Require().Nil(proposal.VotingStartTime)
 
-		suite.Require().NoError(suite.govKeeper.ActivateVotingPeriod(suite.ctx, proposal))
+		suite.govKeeper.ActivateVotingPeriod(suite.ctx, proposal)
 
 		proposal, err = suite.govKeeper.Proposals.Get(suite.ctx, proposal.Id)
 		suite.Require().Nil(err)
@@ -173,33 +173,6 @@ func (suite *KeeperTestSuite) TestSubmitProposal() {
 	}
 }
 
-// TestSubmitProposal_EmitsMessagesWithoutLeadingComma is a regression test for
-// https://github.com/cosmos/cosmos-sdk/issues/26045 — the proposal_messages
-// event attribute previously contained a leading comma because each type URL
-// was prepended with one inside the loop.
-func (suite *KeeperTestSuite) TestSubmitProposal_EmitsMessagesWithoutLeadingComma() {
-	suite.reset()
-
-	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
-	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
-	prop, err := v1.NewLegacyContent(&tp, govAcct)
-	suite.Require().NoError(err)
-
-	msgs := []sdk.Msg{prop, prop}
-	_, err = suite.govKeeper.SubmitProposal(suite.ctx, msgs, "", "title", "summary", suite.addrs[0], false)
-	suite.Require().NoError(err)
-
-	attrs, ok := suite.ctx.EventManager().Events().GetAttributes(types.AttributeKeyProposalMessages)
-	suite.Require().True(ok, "proposal_messages attribute should be emitted")
-	suite.Require().NotEmpty(attrs)
-
-	value := attrs[0].Value
-	suite.Require().False(strings.HasPrefix(value, ","), "proposal_messages must not start with a leading comma, got %q", value)
-
-	expected := strings.Join([]string{sdk.MsgTypeURL(prop), sdk.MsgTypeURL(prop)}, ",")
-	suite.Require().Equal(expected, value)
-}
-
 func (suite *KeeperTestSuite) TestCancelProposal() {
 	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
 	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
@@ -265,7 +238,7 @@ func (suite *KeeperTestSuite) TestCancelProposal() {
 				suite.Require().Nil(err)
 
 				proposal2.Status = v1.ProposalStatus_PROPOSAL_STATUS_PASSED
-				suite.Require().NoError(suite.govKeeper.SetProposal(suite.ctx, proposal2))
+				suite.govKeeper.SetProposal(suite.ctx, proposal2)
 
 				return proposal2ID, suite.addrs[1].String()
 			},

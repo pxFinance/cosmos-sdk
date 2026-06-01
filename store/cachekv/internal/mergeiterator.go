@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/types"
 )
 
 // cacheMergeIterator merges a parent Iterator and a cache Iterator.
@@ -156,7 +156,7 @@ func (iter *cacheMergeIterator[V]) Error() error {
 	return nil
 }
 
-// assertValid checks if not valid, panics.
+// If not valid, panics.
 // NOTE: May have side-effect of iterating over cache.
 func (iter *cacheMergeIterator[V]) assertValid() {
 	if err := iter.Error(); err != nil {
@@ -164,7 +164,7 @@ func (iter *cacheMergeIterator[V]) assertValid() {
 	}
 }
 
-// compare is like bytes.Compare but opposite if not ascending.
+// Like bytes.Compare but opposite if not ascending.
 func (iter *cacheMergeIterator[V]) compare(a, b []byte) int {
 	if iter.ascending {
 		return bytes.Compare(a, b)
@@ -173,7 +173,7 @@ func (iter *cacheMergeIterator[V]) compare(a, b []byte) int {
 	return bytes.Compare(a, b) * -1
 }
 
-// skipCacheDeletes skips all delete-items from the cache w/ `key < until`.  After this function,
+// Skip all delete-items from the cache w/ `key < until`.  After this function,
 // current cache item is a non-delete-item, or `until <= key`.
 // If the current cache item is not a delete item, does nothing.
 // If `until` is nil, there is no limit, and cache may end up invalid.
@@ -186,7 +186,7 @@ func (iter *cacheMergeIterator[V]) skipCacheDeletes(until []byte) {
 	}
 }
 
-// skipUntilExistsOrInvalid fast forwards cache (or parent+cache in case of deleted items) until current
+// Fast forwards cache (or parent+cache in case of deleted items) until current
 // item exists, or until iterator becomes invalid.
 // Returns whether the iterator is valid.
 func (iter *cacheMergeIterator[V]) skipUntilExistsOrInvalid() bool {

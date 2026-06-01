@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"slices"
+	"slices" //nolint: gci // ignore this line for this linter
 
 	"github.com/cockroachdb/errors"
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtprotocrypto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	cmtprotocrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	protoio "github.com/cosmos/gogoproto/io"
-	"github.com/cosmos/gogoproto/proto"
+	"github.com/cosmos/gogoproto/proto" //nolint: gci // ignore this line for this linter
 
 	"cosmossdk.io/core/comet"
 
@@ -22,7 +22,7 @@ import (
 )
 
 type (
-	// ValidatorStore defines the interface contract required for verifying vote
+	// ValidatorStore defines the interface contract require for verifying vote
 	// extension signatures. Typically, this will be implemented by the x/staking
 	// module, which has knowledge of the CometBFT public key.
 	ValidatorStore interface {
@@ -40,8 +40,8 @@ type (
 // a proposer in PrepareProposal. It returns an error if any signature is invalid
 // or if unexpected vote extensions and/or signatures are found or less than 2/3
 // power is received.
-// NOTE: From v0.50.5 the height (`int64`) and chain ID (`string`) parameters are ignored to fix an issue.
-// The values are instead read from ctx.HeaderInfo(). These parameters will be removed from the function in v0.51+.
+// NOTE: From v0.50.5 `currentHeight` and `chainID` arguments are ignored for fixing an issue.
+// They will be removed from the function in v0.51+.
 func ValidateVoteExtensions(
 	ctx sdk.Context,
 	valStore ValidatorStore,
@@ -84,7 +84,7 @@ func ValidateVoteExtensions(
 		totalVP += vote.Validator.Power
 
 		// Only check + include power if the vote is a commit vote. There must be super-majority, otherwise the
-		// previous block (the block the vote is for) could not have been committed.
+		// previous block (the block vote is for) could not have been committed.
 		if vote.BlockIdFlag != cmtproto.BlockIDFlagCommit {
 			continue
 		}
@@ -230,11 +230,6 @@ func (h *DefaultProposalHandler) SetTxSelector(ts TxSelector) {
 	h.txSelector = ts
 }
 
-// SetSignerExtractionAdapter sets the SetSignerExtractionAdapter on the DefaultProposalHandler.
-func (h *DefaultProposalHandler) SetSignerExtractionAdapter(signerExtAdapter mempool.SignerExtractionAdapter) {
-	h.signerExtAdapter = signerExtAdapter
-}
-
 // PrepareProposalHandler returns the default implementation for processing an
 // ABCI proposal. The application's mempool is enumerated and all valid
 // transactions are added to the proposal. Transactions are valid if they:
@@ -242,7 +237,7 @@ func (h *DefaultProposalHandler) SetSignerExtractionAdapter(signerExtAdapter mem
 // 1) Successfully encode to bytes.
 // 2) Are valid (i.e. pass runTx, AnteHandler only).
 //
-// Enumeration is halted once RequestPrepareProposal.MaxBytes of transactions is
+// Enumeration is halted once PrepareProposalRequest.MaxBytes of transactions is
 // reached or the mempool is exhausted.
 //
 // Note:
@@ -256,7 +251,7 @@ func (h *DefaultProposalHandler) SetSignerExtractionAdapter(signerExtAdapter mem
 // requested from CometBFT will simply be returned, which, by default, are in
 // FIFO order.
 func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
-	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+	return func(ctx sdk.Context, req *abci.PrepareProposalRequest) (*abci.PrepareProposalResponse, error) {
 		var maxBlockGas uint64
 		if b := ctx.ConsensusParams().Block; b != nil {
 			maxBlockGas = uint64(b.MaxGas)
@@ -282,58 +277,45 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 				}
 			}
 
-			return &abci.ResponsePrepareProposal{Txs: h.txSelector.SelectedTxs(ctx)}, nil
+			return &abci.PrepareProposalResponse{Txs: h.txSelector.SelectedTxs(ctx)}, nil
 		}
 
-		type invalidTx struct {
-			tx  sdk.Tx
-			err error
-		}
-
+		selectedTxsSignersSeqs := make(map[string]uint64)
 		var (
-			// invalid txs to be removed out of the loop to avoid dead lock
-			invalidTxs             []invalidTx
-			resError               error
-			selectedTxsNums        int
-			selectedTxsSignersSeqs = make(map[string]uint64)
+			resError        error
+			selectedTxsNums int
+			invalidTxs      []sdk.Tx // invalid txs to be removed out of the loop to avoid dead lock
 		)
-
 		mempool.SelectBy(ctx, h.mempool, req.Txs, func(memTx sdk.Tx) bool {
-			unorderedTx, ok := memTx.(sdk.TxWithUnordered)
-			isUnordered := ok && unorderedTx.GetUnordered()
+			signerData, err := h.signerExtAdapter.GetSigners(memTx)
+			if err != nil {
+				// propagate the error to the caller
+				resError = err
+				return false
+			}
+
+			// If the signers aren't in selectedTxsSignersSeqs then we haven't seen them before
+			// so we add them and continue given that we don't need to check the sequence.
+			shouldAdd := true
 			txSignersSeqs := make(map[string]uint64)
-
-			// if the tx is unordered, we don't need to check the sequence, we just add it
-			if !isUnordered {
-				signerData, err := h.signerExtAdapter.GetSigners(memTx)
-				if err != nil {
-					// propagate the error to the caller
-					resError = err
-					return false
-				}
-
-				// If the signers aren't in selectedTxsSignersSeqs then we haven't seen them before
-				// so we add them and continue given that we don't need to check the sequence.
-				shouldAdd := true
-				for _, signer := range signerData {
-					seq, ok := selectedTxsSignersSeqs[signer.Signer.String()]
-					if !ok {
-						txSignersSeqs[signer.Signer.String()] = signer.Sequence
-						continue
-					}
-
-					// If we have seen this signer before in this block, we must make
-					// sure that the current sequence is seq+1; otherwise is invalid
-					// and we skip it.
-					if seq+1 != signer.Sequence {
-						shouldAdd = false
-						break
-					}
+			for _, signer := range signerData {
+				seq, ok := selectedTxsSignersSeqs[signer.Signer.String()]
+				if !ok {
 					txSignersSeqs[signer.Signer.String()] = signer.Sequence
+					continue
 				}
-				if !shouldAdd {
-					return true
+
+				// If we have seen this signer before in this block, we must make
+				// sure that the current sequence is seq+1; otherwise is invalid
+				// and we skip it.
+				if seq+1 != signer.Sequence {
+					shouldAdd = false
+					break
 				}
+				txSignersSeqs[signer.Signer.String()] = signer.Sequence
+			}
+			if !shouldAdd {
+				return true
 			}
 
 			// NOTE: Since transaction verification was already executed in CheckTx,
@@ -342,7 +324,7 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 			// check again.
 			txBz, err := h.txVerifier.PrepareProposalVerifyTx(memTx)
 			if err != nil {
-				invalidTxs = append(invalidTxs, invalidTx{tx: memTx, err: err})
+				invalidTxs = append(invalidTxs, memTx)
 			} else {
 				stop := h.txSelector.SelectTxForProposal(ctx, uint64(req.MaxTxBytes), maxBlockGas, memTx, txBz)
 				if stop {
@@ -350,21 +332,18 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 				}
 
 				txsLen := len(h.txSelector.SelectedTxs(ctx))
-				// If the tx is unordered, we don't need to update the sender sequence.
-				if !isUnordered {
-					for sender, seq := range txSignersSeqs {
-						// If txsLen != selectedTxsNums is true, it means that we've
-						// added a new tx to the selected txs, so we need to update
-						// the sequence of the sender.
-						if txsLen != selectedTxsNums {
-							selectedTxsSignersSeqs[sender] = seq
-						} else if _, ok := selectedTxsSignersSeqs[sender]; !ok {
-							// The transaction hasn't been added but it passed the
-							// verification, so we know that the sequence is correct.
-							// So we set this sender's sequence to seq-1, in order
-							// to avoid unnecessary calls to PrepareProposalVerifyTx.
-							selectedTxsSignersSeqs[sender] = seq - 1
-						}
+				for sender, seq := range txSignersSeqs {
+					// If txsLen != selectedTxsNums is true, it means that we've
+					// added a new tx to the selected txs, so we need to update
+					// the sequence of the sender.
+					if txsLen != selectedTxsNums {
+						selectedTxsSignersSeqs[sender] = seq
+					} else if _, ok := selectedTxsSignersSeqs[sender]; !ok {
+						// The transaction hasn't been added but it passed the
+						// verification, so we know that the sequence is correct.
+						// So we set this sender's sequence to seq-1, in order
+						// to avoid unnecessary calls to PrepareProposalVerifyTx.
+						selectedTxsSignersSeqs[sender] = seq - 1
 					}
 				}
 				selectedTxsNums = txsLen
@@ -377,19 +356,14 @@ func (h *DefaultProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHan
 			return nil, resError
 		}
 
-		for _, invalidTx := range invalidTxs {
-			reason := mempool.RemoveReason{
-				Caller: mempool.CallerPrepareProposalRemoveInvalid,
-				Error:  invalidTx.err,
-			}
-
-			err := mempool.RemoveWithReason(ctx, h.mempool, invalidTx.tx, reason)
+		for _, tx := range invalidTxs {
+			err := h.mempool.Remove(tx)
 			if err != nil && !errors.Is(err, mempool.ErrTxNotFound) {
 				return nil, err
 			}
 		}
 
-		return &abci.ResponsePrepareProposal{Txs: h.txSelector.SelectedTxs(ctx)}, nil
+		return &abci.PrepareProposalResponse{Txs: h.txSelector.SelectedTxs(ctx)}, nil
 	}
 }
 
@@ -412,7 +386,7 @@ func (h *DefaultProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHan
 		return NoOpProcessProposal()
 	}
 
-	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+	return func(ctx sdk.Context, req *abci.ProcessProposalRequest) (*abci.ProcessProposalResponse, error) {
 		var totalTxGas uint64
 
 		var maxBlockGas int64
@@ -423,7 +397,7 @@ func (h *DefaultProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHan
 		for _, txBytes := range req.Txs {
 			tx, err := h.txVerifier.ProcessProposalVerifyTx(txBytes)
 			if err != nil {
-				return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
+				return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 			}
 
 			if maxBlockGas > 0 {
@@ -433,44 +407,44 @@ func (h *DefaultProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHan
 				}
 
 				if totalTxGas > uint64(maxBlockGas) {
-					return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
+					return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 				}
 			}
 		}
 
-		return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_ACCEPT}, nil
+		return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 	}
 }
 
 // NoOpPrepareProposal defines a no-op PrepareProposal handler. It will always
 // return the transactions sent by the client's request.
 func NoOpPrepareProposal() sdk.PrepareProposalHandler {
-	return func(_ sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
+	return func(_ sdk.Context, req *abci.PrepareProposalRequest) (*abci.PrepareProposalResponse, error) {
+		return &abci.PrepareProposalResponse{Txs: req.Txs}, nil
 	}
 }
 
 // NoOpProcessProposal defines a no-op ProcessProposal Handler. It will always
 // return ACCEPT.
 func NoOpProcessProposal() sdk.ProcessProposalHandler {
-	return func(_ sdk.Context, _ *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
-		return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_ACCEPT}, nil
+	return func(_ sdk.Context, _ *abci.ProcessProposalRequest) (*abci.ProcessProposalResponse, error) {
+		return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 	}
 }
 
 // NoOpExtendVote defines a no-op ExtendVote handler. It will always return an
 // empty byte slice as the vote extension.
 func NoOpExtendVote() sdk.ExtendVoteHandler {
-	return func(_ sdk.Context, _ *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
-		return &abci.ResponseExtendVote{VoteExtension: []byte{}}, nil
+	return func(_ sdk.Context, _ *abci.ExtendVoteRequest) (*abci.ExtendVoteResponse, error) {
+		return &abci.ExtendVoteResponse{VoteExtension: []byte{}}, nil
 	}
 }
 
 // NoOpVerifyVoteExtensionHandler defines a no-op VerifyVoteExtension handler. It
 // will always return an ACCEPT status with no error.
 func NoOpVerifyVoteExtensionHandler() sdk.VerifyVoteExtensionHandler {
-	return func(_ sdk.Context, _ *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
-		return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_ACCEPT}, nil
+	return func(_ sdk.Context, _ *abci.VerifyVoteExtensionRequest) (*abci.VerifyVoteExtensionResponse, error) {
+		return &abci.VerifyVoteExtensionResponse{Status: abci.VERIFY_VOTE_EXTENSION_STATUS_ACCEPT}, nil
 	}
 }
 

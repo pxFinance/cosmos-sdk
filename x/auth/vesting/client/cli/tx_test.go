@@ -52,7 +52,7 @@ func (s *CLITestSuite) SetupSuite() {
 func (s *CLITestSuite) TestNewMsgCreateVestingAccountCmd() {
 	accounts := testutil.CreateKeyringAccounts(s.T(), s.kr, 1)
 	cmd := cli.NewMsgCreateVestingAccountCmd(address.NewBech32Codec("cosmos"))
-	cmd.SetOut(io.Discard)
+	cmd.SetOutput(io.Discard)
 
 	extraArgs := []string{
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
@@ -118,6 +118,7 @@ func (s *CLITestSuite) TestNewMsgCreateVestingAccountCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			ctx := svrcmd.CreateExecuteContext(context.Background())
 
@@ -140,7 +141,7 @@ func (s *CLITestSuite) TestNewMsgCreateVestingAccountCmd() {
 func (s *CLITestSuite) TestNewMsgCreatePermanentLockedAccountCmd() {
 	accounts := testutil.CreateKeyringAccounts(s.T(), s.kr, 1)
 	cmd := cli.NewMsgCreatePermanentLockedAccountCmd(address.NewBech32Codec("cosmos"))
-	cmd.SetOut(io.Discard)
+	cmd.SetOutput(io.Discard)
 
 	extraArgs := []string{
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
@@ -197,6 +198,7 @@ func (s *CLITestSuite) TestNewMsgCreatePermanentLockedAccountCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			ctx := svrcmd.CreateExecuteContext(context.Background())
 
@@ -218,7 +220,7 @@ func (s *CLITestSuite) TestNewMsgCreatePermanentLockedAccountCmd() {
 func (s *CLITestSuite) TestNewMsgCreatePeriodicVestingAccountCmd() {
 	accounts := testutil.CreateKeyringAccounts(s.T(), s.kr, 1)
 	cmd := cli.NewMsgCreatePeriodicVestingAccountCmd(address.NewBech32Codec("cosmos"))
-	cmd.SetOut(io.Discard)
+	cmd.SetOutput(io.Discard)
 
 	extraArgs := []string{
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
@@ -256,6 +258,7 @@ func (s *CLITestSuite) TestNewMsgCreatePeriodicVestingAccountCmd() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			ctx := svrcmd.CreateExecuteContext(context.Background())
 

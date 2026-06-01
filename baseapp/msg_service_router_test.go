@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -33,7 +33,7 @@ func TestRegisterMsgService(t *testing.T) {
 			depinject.Supply(log.NewTestLogger(t)),
 		), &appBuilder, &registry)
 	require.NoError(t, err)
-	app := appBuilder.Build(dbm.NewMemDB())
+	app := appBuilder.Build(dbm.NewMemDB(), nil)
 
 	require.Panics(t, func() {
 		testdata.RegisterMsgServer(
@@ -66,7 +66,7 @@ func TestRegisterMsgServiceTwice(t *testing.T) {
 		), &appBuilder, &registry)
 	require.NoError(t, err)
 	db := dbm.NewMemDB()
-	app := appBuilder.Build(db)
+	app := appBuilder.Build(db, nil)
 	testdata.RegisterInterfaces(registry)
 
 	// First time registering service shouldn't panic.
@@ -99,7 +99,7 @@ func TestHybridHandlerByMsgName(t *testing.T) {
 		), &appBuilder, &registry)
 	require.NoError(t, err)
 	db := dbm.NewMemDB()
-	app := appBuilder.Build(db)
+	app := appBuilder.Build(db, nil)
 	testdata.RegisterInterfaces(registry)
 
 	testdata.RegisterMsgServer(
@@ -135,7 +135,7 @@ func TestMsgService(t *testing.T) {
 			depinject.Supply(log.NewNopLogger()),
 		), &appBuilder, &cdc, &interfaceRegistry)
 	require.NoError(t, err)
-	app := appBuilder.Build(dbm.NewMemDB())
+	app := appBuilder.Build(dbm.NewMemDB(), nil)
 
 	// patch in TxConfig instead of using an output from x/auth/tx
 	txConfig := authtx.NewTxConfig(cdc, authtx.DefaultSignModes)
@@ -150,7 +150,7 @@ func TestMsgService(t *testing.T) {
 		app.MsgServiceRouter(),
 		testdata.MsgServerImpl{},
 	)
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1})
+	_, err = app.FinalizeBlock(&abci.FinalizeBlockRequest{Height: 1})
 	require.NoError(t, err)
 
 	_, _, addr := testdata.KeyTestPubAddr()
@@ -196,7 +196,7 @@ func TestMsgService(t *testing.T) {
 	// Send the tx to the app
 	txBytes, err := txConfig.TxEncoder()(txBuilder.GetTx())
 	require.NoError(t, err)
-	res, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1, Txs: [][]byte{txBytes}})
+	res, err := app.FinalizeBlock(&abci.FinalizeBlockRequest{Height: 1, Txs: [][]byte{txBytes}})
 	require.NoError(t, err)
 	require.Equal(t, abci.CodeTypeOK, res.TxResults[0].Code, "res=%+v", res)
 }

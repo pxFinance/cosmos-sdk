@@ -112,7 +112,7 @@ func BenchmarkParseChainID(b *testing.B) {
 	b.ReportAllocs()
 	b.Run("new", func(b *testing.B) {
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			chainID, err := types.ParseChainIDFromGenesis(strings.NewReader(BenchmarkGenesis))
 			require.NoError(b, err)
 			require.Equal(b, expChainID, chainID)
@@ -121,7 +121,7 @@ func BenchmarkParseChainID(b *testing.B) {
 
 	b.Run("old", func(b *testing.B) {
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			doc, err := types.AppGenesisFromReader(strings.NewReader(BenchmarkGenesis))
 			require.NoError(b, err)
 			require.Equal(b, expChainID, doc.ChainID)

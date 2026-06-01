@@ -10,7 +10,7 @@ This paper specifies the Staking module of the Cosmos SDK that was first
 described in the [Cosmos Whitepaper](https://cosmos.network/about/whitepaper)
 in June 2016.
 
-The module enables Cosmos SDK-based blockchains to support an advanced
+The module enables Cosmos SDK-based blockchain to support an advanced
 Proof-of-Stake (PoS) system. In this system, holders of the native staking token of
 the chain can become validators and can delegate tokens to validators,
 ultimately determining the effective validator set for the system.
@@ -167,12 +167,9 @@ https://github.com/cosmos/cosmos-sdk/blob/v0.47.0-rc1/proto/cosmos/staking/v1bet
 ### Delegation
 
 Delegations are identified by combining `DelegatorAddr` (the address of the delegator)
-with the `ValidatorAddr`. Delegators are indexed in the store as follows:
+with the `ValidatorAddr` Delegators are indexed in the store as follows:
 
 * Delegation: `0x31 | DelegatorAddrLen (1 byte) | DelegatorAddr | ValidatorAddrLen (1 byte) | ValidatorAddr -> ProtocolBuffer(delegation)`
-* DelegationByValIndex: `0x71 | ValidatorAddrLen (1 byte) | ValidatorAddr | DelegatorAddrLen (1 byte) | DelegatorAddr -> nil`
-
-`DelegationByValIndex` is an additional index that enables lookups for all delegations to a given validator.
 
 Stake holders may delegate coins to validators; under this circumstance their
 funds are held in a `Delegation` data structure. It is owned by one
@@ -416,6 +413,7 @@ Delegation may be called.
 * update the validator with removed the delegator shares and associated coins
 * if the validator state is `Bonded`, transfer the `Coins` worth of the unbonded
   shares from the `BondedPool` to the `NotBondedPool` `ModuleAccount`
+* remove the validator if it is unbonded and there are no more delegation shares.
 * remove the validator if it is unbonded and there are no more delegation shares
 * get a unique `unbondingId` and map it to the `UnbondingDelegationEntry` in `UnbondingDelegationByUnbondingId`
 * call the `AfterUnbondingInitiated(unbondingId)` hook
@@ -466,15 +464,15 @@ When a Validator is slashed, the following occurs:
 
 * The total `slashAmount` is calculated as the `slashFactor` (a chain parameter) \* `TokensFromConsensusPower`,
   the total number of tokens bonded to the validator at the time of the infraction.
-* Every unbonding delegation and pseudo-unbonding redelegation such that the infraction occurred before the unbonding or
+* Every unbonding delegation and pseudo-unbonding redelegation such that the infraction occured before the unbonding or
   redelegation began from the validator are slashed by the `slashFactor` percentage of the initialBalance.
 * Each amount slashed from redelegations and unbonding delegations is subtracted from the
   total slash amount.
-* The `remainingSlashAmount` is then slashed from the validator's tokens in the `BondedPool` or
+* The `remaingSlashAmount` is then slashed from the validator's tokens in the `BondedPool` or
   `NonBondedPool` depending on the validator's status. This reduces the total supply of tokens.
 
 In the case of a slash due to any infraction that requires evidence to submitted (for example double-sign), the slash
-occurs at the block where the evidence is included, not at the block where the infraction occurred.
+occurs at the block where the evidence is included, not at the block where the infraction occured.
 Put otherwise, validators are not slashed retroactively, only when they are caught.
 
 #### Slash Unbonding Delegation
@@ -839,13 +837,11 @@ following hooks can registered with staking:
     * called when a delegation is created
 * `BeforeDelegationSharesModified(Context, AccAddress, ValAddress) error`
     * called when a delegation's shares are modified
-* `BeforeDelegationRemoved(Context, AccAddress, ValAddress) error`
-    * called when a delegation is removed
 * `AfterDelegationModified(Context, AccAddress, ValAddress) error`
     * called when a delegation is created or modified
-* `BeforeValidatorSlashed(Context, ValAddress, math.LegacyDec) error`
-    * called when a validator is about to be slashed
-* `AfterUnbondingInitiated(Context, uint64) error`
+* `BeforeDelegationRemoved(Context, AccAddress, ValAddress) error`
+    * called when a delegation is removed
+* `AfterUnbondingInitiated(Context, UnbondingID)`
     * called when an unbonding operation (validator unbonding, unbonding delegation, redelegation) was initiated
 
 
@@ -943,9 +939,9 @@ The staking module contains the following parameters:
 | Key               | Type             | Example                |
 |-------------------|------------------|------------------------|
 | UnbondingTime     | string (time ns) | "259200000000000"      |
-| MaxValidators     | uint32           | 100                    |
-| MaxEntries        | uint32           | 7                      |
-| HistoricalEntries | uint32           | 10000                  |
+| MaxValidators     | uint16           | 100                    |
+| KeyMaxEntries     | uint16           | 7                      |
+| HistoricalEntries | uint16           | 3                      |
 | BondDenom         | string           | "stake"                |
 | MinCommissionRate | string           | "0.000000000000000000" |
 
@@ -1635,7 +1631,7 @@ simd tx staking edit-validator [flags]
 Example:
 
 ```bash
-simd tx staking edit-validator --moniker "new_moniker_name" --website "new_website_url" --from mykey
+simd tx staking edit-validator --moniker "new_moniker_name" --website "new_webiste_url" --from mykey
 ```
 
 ##### redelegate
@@ -2316,7 +2312,7 @@ A user can query the `staking` module using REST endpoints.
 
 #### DelegatorDelegations
 
-The `DelegatorDelegations` REST endpoint queries all delegations of a given delegator address.
+The `DelegtaorDelegations` REST endpoint queries all delegations of a given delegator address.
 
 ```bash
 /cosmos/staking/v1beta1/delegations/{delegatorAddr}

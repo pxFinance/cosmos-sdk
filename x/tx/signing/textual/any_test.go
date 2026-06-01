@@ -22,9 +22,8 @@ import (
 
 	bankv1beta1 "cosmossdk.io/api/cosmos/bank/v1beta1"
 	basev1beta1 "cosmossdk.io/api/cosmos/base/v1beta1"
-
-	"github.com/cosmos/cosmos-sdk/x/tx/internal/testpb"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/textual"
+	"cosmossdk.io/x/tx/internal/testpb"
+	"cosmossdk.io/x/tx/signing/textual"
 )
 
 type anyJSONTest struct {
@@ -89,6 +88,7 @@ func TestDynamicpb(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			any, err := anyutil.New(tc.msg)
 			require.NoError(t, err)

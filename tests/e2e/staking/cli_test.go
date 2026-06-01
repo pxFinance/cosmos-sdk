@@ -1,15 +1,14 @@
 //go:build e2e
+// +build e2e
 
 package testutil
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
 	"cosmossdk.io/simapp"
-
 	"github.com/cosmos/cosmos-sdk/testutil/network"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestE2ETestSuite(t *testing.T) {

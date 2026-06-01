@@ -74,10 +74,10 @@ the viper literal and passed to the application construction.
 Example:
 
 ```go
-func newApp(logger log.Logger, db dbm.DB, appOpts servertypes.AppOptions) servertypes.Application {
+func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
 	baseappOptions := server.DefaultBaseappOptions(appOpts)
 	return simapp.NewSimApp(
-		logger, db, true,
+		logger, db, traceStore, true,
 		appOpts,
 		baseappOptions...,
 	)
@@ -85,6 +85,6 @@ func newApp(logger log.Logger, db dbm.DB, appOpts servertypes.AppOptions) server
 ```
 
 Note, some of the options provided are exposed via CLI flags in the start command
-and some are also allowed to be set in the application's `app.toml`. It is recommended
+and some are also allowed to be set in the application's `app.toml`. It is recommend
 to use the `cast` package for type safety guarantees and due to the limitations of
 CLI flag types.

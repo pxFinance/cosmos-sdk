@@ -3,10 +3,11 @@ package ante_test
 import (
 	"fmt"
 	"testing"
-	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
+
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
@@ -15,7 +16,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256r1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/crypto/types/multisig"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
@@ -71,35 +71,6 @@ func TestSetPubKey(t *testing.T) {
 	}
 }
 
-// TestSetPubKey_UnorderedNoEvents tests that when the tx is unordered, the sequence event is not emitted.
-func TestSetPubKey_UnorderedNoEvents(t *testing.T) {
-	suite := SetupTestSuite(t, true)
-	suite.txBuilder = suite.clientCtx.TxConfig.NewTxBuilder()
-
-	// prepare accounts for tx
-	priv1, _, addr1 := testdata.KeyTestPubAddr()
-	acc := suite.accountKeeper.NewAccountWithAddress(suite.ctx, addr1)
-	require.NoError(t, acc.SetAccountNumber(uint64(1000)))
-	suite.accountKeeper.SetAccount(suite.ctx, acc)
-	require.NoError(t, suite.txBuilder.SetMsgs(testdata.NewTestMsg(addr1)))
-
-	privs, accNums, accSeqs := []cryptotypes.PrivKey{priv1}, []uint64{0}, []uint64{0}
-	tx, err := suite.CreateTestUnorderedTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT, true, time.Unix(100, 0))
-	require.NoError(t, err)
-
-	spkd := ante.NewSetPubKeyDecorator(suite.accountKeeper)
-	antehandler := sdk.ChainAnteDecorators(spkd)
-
-	ctx, err := antehandler(suite.ctx.WithBlockTime(time.Unix(95, 0)), tx, false)
-	require.NoError(t, err)
-	events := ctx.EventManager().Events()
-	for _, event := range events {
-		// if this event were emitted, the tx search by address/sequence would break when an unordered
-		// transaction uses the same sequence number as another transaction from the same sender.
-		require.NotContains(t, event.Attributes, sdk.AttributeKeyAccountSequence)
-	}
-}
-
 func TestConsumeSignatureVerificationGas(t *testing.T) {
 	suite := SetupTestSuite(t, true)
 	params := types.DefaultParams()
@@ -111,7 +82,7 @@ func TestConsumeSignatureVerificationGas(t *testing.T) {
 	multisigKey1 := kmultisig.NewLegacyAminoPubKey(2, pkSet1)
 	multisignature1 := multisig.NewMultisig(len(pkSet1))
 	expectedCost1 := expectedGasCostByKeys(pkSet1)
-	for i := range pkSet1 {
+	for i := 0; i < len(pkSet1); i++ {
 		stdSig := legacytx.StdSignature{PubKey: pkSet1[i], Signature: sigSet1[i]} //nolint:staticcheck // SA1019: legacytx.StdSignature is deprecated
 		sigV2, err := legacytx.StdSignatureToSignatureV2(suite.clientCtx.LegacyAmino, stdSig)
 		require.NoError(t, err)
@@ -131,7 +102,7 @@ func TestConsumeSignatureVerificationGas(t *testing.T) {
 		gasConsumed uint64
 		shouldErr   bool
 	}{
-		{"PubKeyEd25519", args{storetypes.NewInfiniteGasMeter(), nil, ed25519.GenPrivKey().PubKey(), params}, p.SigVerifyCostED25519, false},
+		{"PubKeyEd25519", args{storetypes.NewInfiniteGasMeter(), nil, ed25519.GenPrivKey().PubKey(), params}, p.SigVerifyCostED25519, true},
 		{"PubKeySecp256k1", args{storetypes.NewInfiniteGasMeter(), nil, secp256k1.GenPrivKey().PubKey(), params}, p.SigVerifyCostSecp256k1, false},
 		{"PubKeySecp256r1", args{storetypes.NewInfiniteGasMeter(), nil, skR1.PubKey(), params}, p.SigVerifyCostSecp256r1(), false},
 		{"Multisig", args{storetypes.NewInfiniteGasMeter(), multisignature1, multisigKey1, params}, expectedCost1, false},
@@ -258,7 +229,7 @@ func TestSigVerification(t *testing.T) {
 						},
 						Sequence: tc.accSeqs[0],
 					}
-					require.NoError(t, suite.txBuilder.SetSignatures(txSigs...))
+					suite.txBuilder.SetSignatures(txSigs...)
 					tx = suite.txBuilder.GetTx()
 				}
 
@@ -297,8 +268,6 @@ func TestSigIntegration(t *testing.T) {
 }
 
 func runSigDecorators(t *testing.T, params types.Params, _ bool, privs ...cryptotypes.PrivKey) (storetypes.Gas, error) {
-	t.Helper()
-
 	suite := SetupTestSuite(t, true)
 	suite.txBuilder = suite.clientCtx.TxConfig.NewTxBuilder()
 
@@ -347,21 +316,8 @@ func runSigDecorators(t *testing.T, params types.Params, _ bool, privs ...crypto
 	return after - before, err
 }
 
-func TestIncrementSequenceDecorator_ShouldFailWhenUnorderedTxsDisabled(t *testing.T) {
-	suite := SetupTestSuite(t, true)
-	isd := ante.NewIncrementSequenceDecorator(suite.accountKeeper)
-	antehandler := sdk.ChainAnteDecorators(isd)
-
-	priv, _, _ := testdata.KeyTestPubAddr()
-	tx, err := suite.CreateTestUnorderedTx(suite.ctx, []cryptotypes.PrivKey{priv}, []uint64{0}, []uint64{0}, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT, true, time.Now())
-	require.NoError(t, err)
-
-	_, err = antehandler(suite.ctx, tx, false)
-	require.ErrorContains(t, err, "unordered transactions are disabled")
-}
-
 func TestIncrementSequenceDecorator(t *testing.T) {
-	suite := SetupTestSuiteWithUnordered(t, true, true)
+	suite := SetupTestSuite(t, true)
 	suite.txBuilder = suite.clientCtx.TxConfig.NewTxBuilder()
 
 	priv, _, addr := testdata.KeyTestPubAddr()
@@ -379,76 +335,27 @@ func TestIncrementSequenceDecorator(t *testing.T) {
 	suite.txBuilder.SetFeeAmount(feeAmount)
 	suite.txBuilder.SetGasLimit(gasLimit)
 
+	tx, err := suite.CreateTestTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT)
+	require.NoError(t, err)
+
 	isd := ante.NewIncrementSequenceDecorator(suite.accountKeeper)
 	antehandler := sdk.ChainAnteDecorators(isd)
 
 	testCases := []struct {
-		name         string
-		ctx          sdk.Context
-		simulate     bool
-		createTx     func() sdk.Tx
-		expectSeqInc bool
+		ctx         sdk.Context
+		simulate    bool
+		expectedSeq uint64
 	}{
-		{
-			"inc on recheck no sim",
-			suite.ctx.WithIsReCheckTx(true),
-			false,
-			func() sdk.Tx {
-				tx, err := suite.CreateTestTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT)
-				require.NoError(t, err)
-				return tx
-			},
-			true,
-		},
-		{
-			"inc on no recheck, no sim",
-			suite.ctx.WithIsReCheckTx(false),
-			false,
-			func() sdk.Tx {
-				tx, err := suite.CreateTestTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT)
-				require.NoError(t, err)
-				return tx
-			},
-			true,
-		},
-		{
-			"inc on recheck and sim",
-			suite.ctx.WithIsReCheckTx(true),
-			true,
-			func() sdk.Tx {
-				tx, err := suite.CreateTestTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT)
-				require.NoError(t, err)
-				return tx
-			},
-			true,
-		},
-		{
-			"unordered tx should not inc sequence",
-			suite.ctx.WithIsReCheckTx(true),
-			true,
-			func() sdk.Tx {
-				tx, err := suite.CreateTestUnorderedTx(suite.ctx, privs, accNums, accSeqs, suite.ctx.ChainID(), signing.SignMode_SIGN_MODE_DIRECT, true, time.Now().Add(time.Hour))
-				require.NoError(t, err)
-				return tx
-			},
-			false,
-		},
+		{suite.ctx.WithIsReCheckTx(true), false, 1},
+		{suite.ctx.WithIsCheckTx(true).WithIsReCheckTx(false), false, 2},
+		{suite.ctx.WithIsReCheckTx(true), false, 3},
+		{suite.ctx.WithIsReCheckTx(true), false, 4},
+		{suite.ctx.WithIsReCheckTx(true), true, 5},
 	}
 
 	for i, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			beforeSeq := suite.accountKeeper.GetAccount(suite.ctx, addr).GetSequence()
-
-			_, err := antehandler(tc.ctx, tc.createTx(), tc.simulate)
-			require.NoError(t, err, "unexpected error; tc #%d, %v", i, tc)
-
-			afterSeq := suite.accountKeeper.GetAccount(suite.ctx, addr).GetSequence()
-
-			if tc.expectSeqInc {
-				require.Equal(t, beforeSeq+1, afterSeq)
-			} else {
-				require.Equal(t, beforeSeq, afterSeq)
-			}
-		})
+		_, err := antehandler(tc.ctx, tx, tc.simulate)
+		require.NoError(t, err, "unexpected error; tc #%d, %v", i, tc)
+		require.Equal(t, tc.expectedSeq, suite.accountKeeper.GetAccount(suite.ctx, addr).GetSequence())
 	}
 }

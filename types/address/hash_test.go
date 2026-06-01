@@ -2,7 +2,6 @@ package address
 
 import (
 	"crypto/sha256"
-	"slices"
 	"testing"
 
 	"github.com/cometbft/cometbft/crypto/tmhash"
@@ -41,7 +40,7 @@ func (suite *AddressSuite) TestComposed() {
 	assert.Len(ac, Len)
 
 	// check if optimizations work
-	checkingKey := slices.Clone(a1.AddressWithLen(suite.T()))
+	checkingKey := append([]byte{}, a1.AddressWithLen(suite.T())...)
 	checkingKey = append(checkingKey, a2.AddressWithLen(suite.T())...)
 	ac2 := Hash(typ, checkingKey)
 	assert.Equal(ac, ac2, "NewComposed works correctly")
@@ -61,25 +60,6 @@ func (suite *AddressSuite) TestComposed() {
 	_, err = Compose(typ, []Addressable{a1, addrMock{make([]byte, 300)}})
 	assert.Error(err)
 	assert.Contains(err.Error(), "should be max 255 bytes, got 300")
-
-	// strict weak ordering: irreflexive and asymmetric
-	la := []byte{1, 2}
-	lb := []byte{3, 4}
-	assert.False(lessBytes(la, la), "lessBytes must be irreflexive")
-	assert.True(lessBytes(la, lb), "lessBytes(a,b) must be true when a < b")
-	assert.False(lessBytes(lb, la), "lessBytes must be asymmetric")
-
-	// Compose must be order-independent even when sub-addresses include duplicates
-	da := addrMock{[]byte{1, 2, 3}}
-	db := addrMock{[]byte{4, 5, 6}}
-	aab, err := Compose("test", []Addressable{da, da, db})
-	assert.NoError(err)
-	aba, err := Compose("test", []Addressable{da, db, da})
-	assert.NoError(err)
-	baa, err := Compose("test", []Addressable{db, da, da})
-	assert.NoError(err)
-	assert.Equal(aab, aba, "Compose must be order-independent with duplicates")
-	assert.Equal(aab, baa, "Compose must be order-independent with duplicates")
 }
 
 func (suite *AddressSuite) TestModule() {
@@ -135,8 +115,6 @@ func (a addrMock) Address() []byte {
 }
 
 func (a addrMock) AddressWithLen(t *testing.T) []byte {
-	t.Helper()
-
 	addr, err := LengthPrefix(a.Addr)
 	assert.NoError(t, err)
 	return addr

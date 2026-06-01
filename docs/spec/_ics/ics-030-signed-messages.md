@@ -32,7 +32,7 @@ implemented by the Cosmos SDK and other third-party organizations is needed. Suc
 standardized protocol subscribes to the following:
 
 * Contains a specification of human-readable and machine-verifiable typed structured data
-* Contains a framework for deterministic and injective encoding of structured data
+* Contains a framework for deterministic and px encoding of structured data
 * Utilizes cryptographic secure hashing and signing algorithms
 * A framework for supporting extensions and domain separation
 * Is invulnerable to chosen ciphertext attacks
@@ -89,7 +89,7 @@ must equal the constant `"message"`. The `@type` field corresponds to the type o
 structure the user will be signing in an application. For now, a user is only
 allowed to sign bytes of valid ASCII text ([see here](https://github.com/cometbft/cometbft/blob/v0.37.0/libs/strings/string.go#L35-L64)).
 However, this will change and evolve to support additional application-specific
-structures that are human-readable and machine-verifiable ([see Future Adaptations](#future-adaptations)).
+structures that are human-readable and machine-verifiable ([see Future Adaptations](#futureadaptations)).
 
 Thus, we can have a canonical JSON structure for signing Cosmos messages using
 the [JSON schema](http://json-schema.org/) specification as such:
@@ -152,7 +152,7 @@ more complex structures, apart from just string messages, and still be able to
 know exactly what they are signing (opposed to signing a bunch of arbitrary bytes).
 
 Thus, in the future, the Cosmos signing message specification will be expected
-to expand upon its canonical JSON structure to include such functionality.
+to expand upon it's canonical JSON structure to include such functionality.
 
 ## API
 

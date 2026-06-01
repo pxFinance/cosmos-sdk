@@ -18,7 +18,7 @@ import (
 
 func generatePubKeys(n int) []types.PubKey {
 	pks := make([]types.PubKey, n)
-	for i := range n {
+	for i := 0; i < n; i++ {
 		pks[i] = secp256k1.GenPrivKey().PubKey()
 	}
 	return pks

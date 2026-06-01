@@ -1,10 +1,10 @@
 package transient
 
 import (
-	"github.com/cosmos/cosmos-sdk/store/v2/internal"
-	"github.com/cosmos/cosmos-sdk/store/v2/internal/btree"
-	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/internal"
+	"cosmossdk.io/store/internal/btree"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/store/types"
 )
 
 var (
@@ -15,7 +15,7 @@ var (
 	_ types.ObjKVStore = (*ObjStore)(nil)
 )
 
-// GStore is a wrapper for a MemDB with Committer implementation
+// Store is a wrapper for a MemDB with Commiter implementation
 type GStore[V any] struct {
 	internal.BTreeStore[V]
 }
@@ -32,8 +32,8 @@ type Store struct {
 
 func NewStore() *Store {
 	return &Store{*NewGStore(
-		types.BytesIsZero,
-		types.BytesValueLen,
+		func(v []byte) bool { return v == nil },
+		func(v []byte) int { return len(v) },
 	)}
 }
 
@@ -48,8 +48,8 @@ type ObjStore struct {
 
 func NewObjStore() *ObjStore {
 	return &ObjStore{*NewGStore(
-		types.AnyIsZero,
-		types.AnyValueLen,
+		func(v any) bool { return v == nil },
+		func(v any) int { return 1 }, // for value length validation
 	)}
 }
 
@@ -57,11 +57,11 @@ func (*ObjStore) GetStoreType() types.StoreType {
 	return types.StoreTypeObject
 }
 
-// Commit cleans up Store.
 // Implements CommitStore
+// Commit cleans up Store.
 func (ts *GStore[V]) Commit() (id types.CommitID) {
 	ts.Clear()
-	return id
+	return
 }
 
 func (ts *GStore[V]) SetPruning(_ pruningtypes.PruningOptions) {}
@@ -72,7 +72,7 @@ func (ts *GStore[V]) GetPruning() pruningtypes.PruningOptions {
 	return pruningtypes.NewPruningOptions(pruningtypes.PruningUndefined)
 }
 
-// LastCommitID implements CommitStore, returns empty CommitID.
+// Implements CommitStore
 func (ts *GStore[V]) LastCommitID() types.CommitID {
 	return types.CommitID{}
 }

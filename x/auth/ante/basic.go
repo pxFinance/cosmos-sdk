@@ -1,15 +1,12 @@
 package ante
 
 import (
-	"slices"
-	"time"
-
 	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/multisig"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
@@ -169,8 +166,10 @@ func isIncompleteSignature(data signing.SignatureData) bool {
 		if len(data.Signatures) == 0 {
 			return true
 		}
-		if slices.ContainsFunc(data.Signatures, isIncompleteSignature) {
-			return true
+		for _, s := range data.Signatures {
+			if isIncompleteSignature(s) {
+				return true
+			}
 		}
 	}
 
@@ -188,17 +187,16 @@ type (
 		sdk.Tx
 
 		GetTimeoutHeight() uint64
-		GetTimeoutTimeStamp() time.Time
 	}
 )
 
-// NewTxTimeoutHeightDecorator defines an AnteHandler decorator that checks for a
+// TxTimeoutHeightDecorator defines an AnteHandler decorator that checks for a
 // tx height timeout.
 func NewTxTimeoutHeightDecorator() TxTimeoutHeightDecorator {
 	return TxTimeoutHeightDecorator{}
 }
 
-// AnteHandle implements an AnteHandler decorator for the TxTimeoutHeightDecorator
+// AnteHandle implements an AnteHandler decorator for the TxHeightTimeoutDecorator
 // type where the current block height is checked against the tx's height timeout.
 // If a height timeout is provided (non-zero) and is less than the current block
 // height, then an error is returned.
@@ -212,14 +210,6 @@ func (txh TxTimeoutHeightDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 	if timeoutHeight > 0 && uint64(ctx.BlockHeight()) > timeoutHeight {
 		return ctx, errorsmod.Wrapf(
 			sdkerrors.ErrTxTimeoutHeight, "block height: %d, timeout height: %d", ctx.BlockHeight(), timeoutHeight,
-		)
-	}
-
-	timeoutTimestamp := timeoutTx.GetTimeoutTimeStamp()
-	blockTime := ctx.BlockHeader().Time
-	if !timeoutTimestamp.IsZero() && timeoutTimestamp.Unix() != 0 && timeoutTimestamp.Before(blockTime) {
-		return ctx, errorsmod.Wrapf(
-			sdkerrors.ErrTxTimeout, "block time: %s, timeout timestamp: %s", blockTime, timeoutTimestamp.String(),
 		)
 	}
 

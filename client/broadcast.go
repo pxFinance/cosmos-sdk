@@ -91,7 +91,7 @@ func (ctx Context) BroadcastTxSync(txBytes []byte) (*sdk.TxResponse, error) {
 		return nil, err
 	}
 
-	res, err := node.BroadcastTxSync(ctx.GetCmdContextWithFallback(), txBytes)
+	res, err := node.BroadcastTxSync(context.Background(), txBytes)
 	if errRes := CheckCometError(err, txBytes); errRes != nil {
 		return errRes, nil
 	}
@@ -107,7 +107,7 @@ func (ctx Context) BroadcastTxAsync(txBytes []byte) (*sdk.TxResponse, error) {
 		return nil, err
 	}
 
-	res, err := node.BroadcastTxAsync(ctx.GetCmdContextWithFallback(), txBytes)
+	res, err := node.BroadcastTxAsync(context.Background(), txBytes)
 	if errRes := CheckCometError(err, txBytes); errRes != nil {
 		return errRes, nil
 	}

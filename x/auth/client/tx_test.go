@@ -27,7 +27,7 @@ func TestParseQueryResponse(t *testing.T) {
 
 	res, err := authclient.ParseQueryResponse(bz)
 	require.NoError(t, err)
-	require.Equal(t, 10, int(res.GasUsed))
+	require.Equal(t, 10, int(res.GasInfo.GasUsed))
 	require.NotNil(t, res.Result)
 
 	res, err = authclient.ParseQueryResponse([]byte("fuzzy"))
@@ -107,6 +107,7 @@ func TestBatchScanner_Scan(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			scanner, i := authclient.NewBatchScanner(clientCtx.TxConfig, strings.NewReader(tt.batch)), 0
 			for scanner.Scan() {

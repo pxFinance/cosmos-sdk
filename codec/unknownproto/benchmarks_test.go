@@ -22,7 +22,7 @@ func init() {
 			Fee:   99,
 			Nested: &testdata.Nested3B{
 				Id:   3,
-				Name: "3A this one that one there those ones",
+				Name: "3A this one that one there those oens",
 				Age:  4588,
 				B4: []*testdata.Nested4B{
 					{
@@ -51,7 +51,6 @@ func BenchmarkRejectUnknownFields_parallel(b *testing.B) {
 }
 
 func benchmarkRejectUnknownFields(b *testing.B, parallel bool) {
-	b.Helper()
 	b.ReportAllocs()
 
 	if !parallel {
@@ -90,7 +89,6 @@ func BenchmarkProtoUnmarshal_parallel(b *testing.B) {
 }
 
 func benchmarkProtoUnmarshal(b *testing.B, parallel bool) {
-	b.Helper()
 	b.ReportAllocs()
 
 	if !parallel {

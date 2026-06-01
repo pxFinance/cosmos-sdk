@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -70,6 +70,7 @@ func TestAddGenesisAccountCmd(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			logger := log.NewNopLogger()
@@ -198,6 +199,7 @@ func TestBulkAddGenesisAccountCmd(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			logger := log.NewNopLogger()

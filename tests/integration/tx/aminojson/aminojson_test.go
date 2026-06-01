@@ -33,12 +33,16 @@ import (
 	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
 	vestingapi "cosmossdk.io/api/cosmos/vesting/v1beta1"
 	"cosmossdk.io/math"
+	"cosmossdk.io/x/evidence"
+	feegrantmodule "cosmossdk.io/x/feegrant/module"
+	"cosmossdk.io/x/tx/signing/aminojson"
+	signing_testutil "cosmossdk.io/x/tx/signing/testutil"
+	"cosmossdk.io/x/upgrade"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	ed25519types "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/multisig"
 	secp256k1types "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	groupmodule "github.com/cosmos/cosmos-sdk/enterprise/group/x/group/module"
 	"github.com/cosmos/cosmos-sdk/tests/integration/rapidgen"
 	gogo_testpb "github.com/cosmos/cosmos-sdk/tests/integration/tx/internal/gogo/testpb"
 	pulsar_testpb "github.com/cosmos/cosmos-sdk/tests/integration/tx/internal/pulsar/testpb"
@@ -61,19 +65,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/consensus"
 	"github.com/cosmos/cosmos-sdk/x/distribution"
 	disttypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
-	"github.com/cosmos/cosmos-sdk/x/evidence"
-	feegrantmodule "github.com/cosmos/cosmos-sdk/x/feegrant/module"
 	"github.com/cosmos/cosmos-sdk/x/gov"
 	gov_v1_types "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	gov_v1beta1_types "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	groupmodule "github.com/cosmos/cosmos-sdk/x/group/module"
 	"github.com/cosmos/cosmos-sdk/x/mint"
+	"github.com/cosmos/cosmos-sdk/x/params"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson"
-	signing_testutil "github.com/cosmos/cosmos-sdk/x/tx/signing/testutil"
-	"github.com/cosmos/cosmos-sdk/x/upgrade"
 )
 
 // TestAminoJSON_Equivalence tests that x/tx/Encoder encoding is equivalent to the legacy Encoder encoding.
@@ -94,7 +95,7 @@ func TestAminoJSON_Equivalence(t *testing.T) {
 	encCfg := testutil.MakeTestEncodingConfig(
 		auth.AppModuleBasic{}, authzmodule.AppModuleBasic{}, bank.AppModuleBasic{}, consensus.AppModuleBasic{},
 		distribution.AppModuleBasic{}, evidence.AppModuleBasic{}, feegrantmodule.AppModuleBasic{},
-		gov.AppModuleBasic{}, groupmodule.AppModuleBasic{}, mint.AppModuleBasic{},
+		gov.AppModuleBasic{}, groupmodule.AppModuleBasic{}, mint.AppModuleBasic{}, params.AppModuleBasic{},
 		slashing.AppModuleBasic{}, staking.AppModuleBasic{}, upgrade.AppModuleBasic{}, vesting.AppModuleBasic{})
 	legacytx.RegressionTestingAminoCodec = encCfg.Amino
 	aj := aminojson.NewEncoder(aminojson.EncoderOptions{})
@@ -161,7 +162,7 @@ func TestAminoJSON_Equivalence(t *testing.T) {
 				signBz, err := handler.GetSignBytes(context.Background(), signerData, txData)
 				require.NoError(t, err)
 
-				legacyHandler := tx.NewSignModeLegacyAminoJSONHandler() //nolint:staticcheck // needed for legacy testing
+				legacyHandler := tx.NewSignModeLegacyAminoJSONHandler()
 				txBuilder := encCfg.TxConfig.NewTxBuilder()
 				require.NoError(t, txBuilder.SetMsgs([]types.Msg{tt.Gogo}...))
 				txBuilder.SetMemo(handlerOptions.Memo)
@@ -184,8 +185,6 @@ func TestAminoJSON_Equivalence(t *testing.T) {
 }
 
 func newAny(t *testing.T, msg proto.Message) *anypb.Any {
-	t.Helper()
-
 	bz, err := proto.Marshal(msg)
 	require.NoError(t, err)
 	typeName := fmt.Sprintf("/%s", msg.ProtoReflect().Descriptor().FullName())
@@ -272,7 +271,7 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 		},
 		"distribution/community_pool_spend_proposal_with_deposit": {
 			gogo:   &disttypes.CommunityPoolSpendProposalWithDeposit{},
-			pulsar: &distapi.CommunityPoolSpendProposalWithDeposit{},
+			pulsar: &distapi.CommunityPoolSpendProposalWithDeposit{}, //nolint:staticcheck // keep test as is testing legacy parity
 		},
 		"distribution/msg_withdraw_delegator_reward": {
 			gogo:   &disttypes.MsgWithdrawDelegatorReward{DelegatorAddress: "foo"},
@@ -456,7 +455,7 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 			require.Equal(t, string(gogoBytes), string(newGogoBytes))
 
 			// test amino json signer handler equivalence
-			msg, ok := tc.gogo.(legacytx.LegacyMsg) //nolint:staticcheck // needed for legacy testing
+			msg, ok := tc.gogo.(legacytx.LegacyMsg)
 			if !ok {
 				// not signable
 				return
@@ -481,7 +480,7 @@ func TestAminoJSON_LegacyParity(t *testing.T) {
 			signBz, err := handler.GetSignBytes(context.Background(), signerData, txData)
 			require.NoError(t, err)
 
-			legacyHandler := tx.NewSignModeLegacyAminoJSONHandler() //nolint:staticcheck // needed for legacy testing
+			legacyHandler := tx.NewSignModeLegacyAminoJSONHandler()
 			txBuilder := encCfg.TxConfig.NewTxBuilder()
 			require.NoError(t, txBuilder.SetMsgs([]types.Msg{msg}...))
 			txBuilder.SetMemo(handlerOptions.Memo)

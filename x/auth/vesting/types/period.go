@@ -11,7 +11,7 @@ import (
 // Periods stores all vesting periods passed as part of a PeriodicVestingAccount
 type Periods []Period
 
-// Duration converts the period Length from seconds to a time.Duration
+// Duration is converts the period Length from seconds to a time.Duration
 func (p Period) Duration() time.Duration {
 	return time.Duration(p.Length) * time.Second
 }
@@ -31,7 +31,7 @@ func (p Periods) TotalDuration() time.Duration {
 	return time.Duration(len) * time.Second
 }
 
-// TotalAmount returns the sum of coins for the period
+// TotalDuration returns the sum of coins for the period
 func (p Periods) TotalAmount() sdk.Coins {
 	total := sdk.Coins{}
 	for _, period := range p {

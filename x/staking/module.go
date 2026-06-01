@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/maps"
 
 	modulev1 "cosmossdk.io/api/cosmos/staking/module/v1"
 	"cosmossdk.io/core/appmodule"
@@ -21,13 +20,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/cosmos-sdk/testutil/simsx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/client/cli"
+	"github.com/cosmos/cosmos-sdk/x/staking/exported"
 	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/cosmos/cosmos-sdk/x/staking/simulation"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -41,6 +40,7 @@ var (
 	_ module.AppModuleBasic      = AppModuleBasic{}
 	_ module.AppModuleSimulation = AppModule{}
 	_ module.HasServices         = AppModule{}
+	_ module.HasInvariants       = AppModule{}
 	_ module.HasABCIGenesis      = AppModule{}
 	_ module.HasABCIEndBlock     = AppModule{}
 
@@ -51,6 +51,7 @@ var (
 // AppModuleBasic defines the basic application module used by the staking module.
 type AppModuleBasic struct {
 	cdc codec.Codec
+	ak  types.AccountKeeper
 }
 
 // Name returns the staking module's name.
@@ -103,6 +104,9 @@ type AppModule struct {
 	keeper        *keeper.Keeper
 	accountKeeper types.AccountKeeper
 	bankKeeper    types.BankKeeper
+
+	// legacySubspace is used solely for migration of x/params managed parameters
+	legacySubspace exported.Subspace
 }
 
 // NewAppModule creates a new AppModule object
@@ -111,12 +115,14 @@ func NewAppModule(
 	keeper *keeper.Keeper,
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
+	ls exported.Subspace,
 ) AppModule {
 	return AppModule{
-		AppModuleBasic: AppModuleBasic{cdc: cdc},
+		AppModuleBasic: AppModuleBasic{cdc: cdc, ak: ak},
 		keeper:         keeper,
 		accountKeeper:  ak,
 		bankKeeper:     bk,
+		legacySubspace: ls,
 	}
 }
 
@@ -126,13 +132,30 @@ func (am AppModule) IsOnePerModuleType() {}
 // IsAppModule implements the appmodule.AppModule interface.
 func (am AppModule) IsAppModule() {}
 
+// RegisterInvariants registers the staking module invariants.
+func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
+	keeper.RegisterInvariants(ir, am.keeper)
+}
+
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	querier := keeper.Querier{Keeper: am.keeper}
 	types.RegisterQueryServer(cfg.QueryServer(), querier)
 
-	_ = keeper.NewMigrator(am.keeper)
+	m := keeper.NewMigrator(am.keeper, am.legacySubspace)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 1 to 2: %v", types.ModuleName, err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, m.Migrate2to3); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 2 to 3: %v", types.ModuleName, err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 3, m.Migrate3to4); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 3 to 4: %v", types.ModuleName, err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 4, m.Migrate4to5); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 4 to 5: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the staking module.
@@ -182,9 +205,12 @@ type ModuleInputs struct {
 	BankKeeper            types.BankKeeper
 	Cdc                   codec.Codec
 	StoreService          store.KVStoreService
+
+	// LegacySubspace is used solely for migration of x/params managed parameters
+	LegacySubspace exported.Subspace `optional:"true"`
 }
 
-// ModuleOutputs contains Dependency Injection Outputs
+// Dependency Injection Outputs
 type ModuleOutputs struct {
 	depinject.Out
 
@@ -208,7 +234,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		in.ValidatorAddressCodec,
 		in.ConsensusAddressCodec,
 	)
-	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper)
+	m := NewAppModule(in.Cdc, k, in.AccountKeeper, in.BankKeeper, in.LegacySubspace)
 	return ModuleOutputs{StakingKeeper: k, Module: m}
 }
 
@@ -222,7 +248,7 @@ func InvokeSetStakingHooks(
 		return nil
 	}
 
-	modNames := slices.Collect(maps.Keys(stakingHooks))
+	modNames := maps.Keys(stakingHooks)
 	order := config.HooksOrder
 	if len(order) == 0 {
 		order = modNames
@@ -259,14 +285,8 @@ func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
 }
 
 // ProposalMsgs returns msgs used for governance proposals for simulations.
-// migrate to ProposalMsgsX. This method is ignored when ProposalMsgsX exists and will be removed in the future.
-func (AppModule) ProposalMsgs(_ module.SimulationState) []simtypes.WeightedProposalMsg {
+func (AppModule) ProposalMsgs(simState module.SimulationState) []simtypes.WeightedProposalMsg {
 	return simulation.ProposalMsgs()
-}
-
-// ProposalMsgsX registers governance proposal messages in the simulation registry.
-func (AppModule) ProposalMsgsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_update_params", 100), simulation.MsgUpdateParamsFactory())
 }
 
 // RegisterStoreDecoder registers a decoder for staking module's types
@@ -274,21 +294,10 @@ func (am AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
 	sdr[types.StoreKey] = simulation.NewDecodeStore(am.cdc)
 }
 
-// WeightedOperations returns all the staking module operations with their respective weights.
-// migrate to WeightedOperationsX. This method is ignored when WeightedOperationsX exists and will be removed in the future
+// WeightedOperations returns the all the staking module operations with their respective weights.
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	return simulation.WeightedOperations(
 		simState.AppParams, simState.Cdc, simState.TxConfig,
 		am.accountKeeper, am.bankKeeper, am.keeper,
 	)
-}
-
-// WeightedOperationsX registers weighted staking module operations for simulation.
-func (am AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Registry) {
-	reg.Add(weights.Get("msg_create_validator", 100), simulation.MsgCreateValidatorFactory(am.keeper))
-	reg.Add(weights.Get("msg_delegate", 100), simulation.MsgDelegateFactory(am.keeper))
-	reg.Add(weights.Get("msg_undelegate", 100), simulation.MsgUndelegateFactory(am.keeper))
-	reg.Add(weights.Get("msg_edit_validator", 5), simulation.MsgEditValidatorFactory(am.keeper))
-	reg.Add(weights.Get("msg_begin_redelegate", 100), simulation.MsgBeginRedelegateFactory(am.keeper))
-	reg.Add(weights.Get("msg_cancel_unbonding_delegation", 100), simulation.MsgCancelUnbondingDelegationFactory(am.keeper))
 }

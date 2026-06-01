@@ -1,12 +1,17 @@
 package internal
 
 import (
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/internal/btree"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"io"
+
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/internal/btree"
+	"cosmossdk.io/store/types"
 )
 
-var _ types.KVStore = (*BTreeStore[[]byte])(nil)
+var (
+	_ types.KVStore    = (*BTreeStore[[]byte])(nil)
+	_ types.ObjKVStore = (*BTreeStore[any])(nil)
+)
 
 // BTreeStore is a wrapper for a BTree with GKVStore[V] implementation
 type BTreeStore[V any] struct {
@@ -20,9 +25,15 @@ func NewBTreeStore[V any](btree btree.BTree[V], isZero func(V) bool, valueLen fu
 	return &BTreeStore[V]{btree, isZero, valueLen}
 }
 
-// Has Implements GKVStore.
+func (ts *BTreeStore[V]) Get(key []byte) (value V) {
+	value, _ = ts.BTree.Get(key)
+	return
+}
+
+// Hash Implements GKVStore.
 func (ts *BTreeStore[V]) Has(key []byte) bool {
-	return !ts.isZero(ts.Get(key))
+	_, found := ts.BTree.Get(key)
+	return found
 }
 
 func (ts *BTreeStore[V]) Iterator(start, end []byte) types.GIterator[V] {
@@ -48,5 +59,10 @@ func (ts *BTreeStore[V]) GetStoreType() types.StoreType {
 
 // CacheWrap branches the underlying store.
 func (ts *BTreeStore[V]) CacheWrap() types.CacheWrap {
+	return cachekv.NewGStore(ts, ts.isZero, ts.valueLen)
+}
+
+// CacheWrapWithTrace branches the underlying store.
+func (ts *BTreeStore[V]) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
 	return cachekv.NewGStore(ts, ts.isZero, ts.valueLen)
 }

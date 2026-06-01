@@ -72,12 +72,14 @@ func (suite *KeeperTestSuite) TestQueryBalance() {
 			types.NewQueryBalanceRequest(addr, barDenom),
 			"",
 			func(res *types.QueryBalanceResponse) {
-				suite.True(res.Balance.Equal(newBarCoin(30)))
+				suite.True(res.Balance.IsEqual(newBarCoin(30)))
 			},
 		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		suite.Run(tc.name, func() {
 			res, err := queryClient.Balance(gocontext.Background(), tc.req)
 			if tc.expectErrMsg == "" {
@@ -374,8 +376,9 @@ func (suite *KeeperTestSuite) TestQueryDenomsMetadata() {
 							Aliases:  []string{"ATOM"},
 						},
 					},
-					Base:    "uatom",
-					Display: "atom",
+					Base:     "uatom",
+					Display:  "atom",
+					Decimals: 6,
 				}
 
 				metadataEth := types.Metadata{
@@ -391,8 +394,9 @@ func (suite *KeeperTestSuite) TestQueryDenomsMetadata() {
 							Aliases:  []string{"ETH", "ether"},
 						},
 					},
-					Base:    "wei",
-					Display: "eth",
+					Base:     "wei",
+					Display:  "eth",
+					Decimals: 18,
 				}
 
 				suite.bankKeeper.SetDenomMetaData(suite.ctx, metadataAtom)
@@ -473,8 +477,9 @@ func (suite *KeeperTestSuite) TestQueryDenomMetadata() {
 							Aliases:  []string{"ATOM"},
 						},
 					},
-					Base:    "uatom",
-					Display: "atom",
+					Base:     "uatom",
+					Display:  "atom",
+					Decimals: 6,
 				}
 
 				suite.bankKeeper.SetDenomMetaData(suite.ctx, expMetadata)
@@ -550,8 +555,9 @@ func (suite *KeeperTestSuite) TestQueryDenomMetadataByQueryStringRequest() {
 							Aliases:  []string{"ATOM"},
 						},
 					},
-					Base:    "uatom",
-					Display: "atom",
+					Base:     "uatom",
+					Display:  "atom",
+					Decimals: 6,
 				}
 
 				suite.bankKeeper.SetDenomMetaData(suite.ctx, expMetadata)
@@ -591,7 +597,7 @@ func (suite *KeeperTestSuite) TestGRPCDenomOwners() {
 	suite.mockMintCoins(mintAcc)
 	suite.Require().NoError(keeper.MintCoins(ctx, minttypes.ModuleName, initCoins))
 
-	for i := range 10 {
+	for i := 0; i < 10; i++ {
 		addr := sdk.AccAddress(fmt.Sprintf("account-%d", i))
 
 		bal := sdk.NewCoins(sdk.NewCoin(
@@ -816,7 +822,7 @@ func (suite *KeeperTestSuite) TestGRPCDenomOwnersByQuery() {
 	suite.mockMintCoins(mintAcc)
 	suite.Require().NoError(keeper.MintCoins(ctx, minttypes.ModuleName, newCoins))
 
-	for i := range 10 {
+	for i := 0; i < 10; i++ {
 		addr := sdk.AccAddress(fmt.Sprintf("account-%d", i))
 
 		bal := sdk.NewCoins(sdk.NewCoin(

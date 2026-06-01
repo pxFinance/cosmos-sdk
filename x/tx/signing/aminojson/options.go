@@ -114,7 +114,11 @@ var customTypeExtension = &protoimpl.ExtensionInfo{
 }
 
 func init() {
-	_ = protoregistry.GlobalTypes.RegisterExtension(customTypeExtension)
+	defer func() {
+		_ = recover()
+	}()
+
+	protoregistry.GlobalTypes.RegisterExtension(customTypeExtension)
 }
 
 func (enc Encoder) getFieldEncoder(field protoreflect.FieldDescriptor) FieldEncoder {
@@ -128,8 +132,8 @@ func (enc Encoder) getFieldEncoder(field protoreflect.FieldDescriptor) FieldEnco
 	if proto.HasExtension(opts, cosmos_proto.E_Scalar) {
 		scalar := proto.GetExtension(opts, cosmos_proto.E_Scalar).(string)
 		// do not handle encoding of fields tagged only with scalar which are not backed by a
-		// LegacyDec custom type.  These types are handled by the default encoding, as they are
-		// expected to already be encoded as their human-readable string representation
+		// LegacyDec custom type.  This types are handled by the default encoding, as they are
+		// expected to already be encoded as their human readable string representation
 		// containing a radix, i.e. "1.2345".
 		// For example:
 		// https://github.com/cosmos/cosmos-sdk/blob/9076487d035e43d39fe54e8498da1ce31b9c845c/x/gov/proto/cosmos/gov/v1/gov.proto#L274

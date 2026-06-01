@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -24,6 +24,7 @@ import (
 	genutiltest "github.com/cosmos/cosmos-sdk/x/genutil/client/testutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/mint"
+	"github.com/cosmos/cosmos-sdk/x/params"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 )
 
@@ -35,6 +36,7 @@ func Test_TestnetCmd(t *testing.T) {
 		staking.AppModuleBasic{},
 		mint.AppModuleBasic{},
 		distribution.AppModuleBasic{},
+		params.AppModuleBasic{},
 		consensus.AppModuleBasic{},
 	)
 

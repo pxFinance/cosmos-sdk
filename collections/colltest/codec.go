@@ -40,11 +40,6 @@ func TestKeyCodec[T any](t *testing.T, keyCodec codec.KeyCodec[T], key T) {
 	decoded, err := keyCodec.DecodeJSON(keyJSON)
 	require.NoError(t, err)
 	require.Equal(t, key, decoded, "json encoding and decoding did not produce the same results")
-
-	// check type
-	require.NotEmpty(t, keyCodec.KeyType())
-	// check string
-	_ = keyCodec.Stringify(key)
 }
 
 // TestValueCodec asserts the correct behavior of a ValueCodec over the type T.
@@ -76,8 +71,10 @@ func TestValueCodec[T any](t *testing.T, encoder codec.ValueCodec[T], value T) {
 // it in order to make the type known by the MockValueCodec.
 func MockValueCodec[T any]() codec.ValueCodec[T] {
 	typ := reflect.ValueOf(new(T)).Elem().Type()
-	isInterface := typ.Kind() == reflect.Interface
-
+	isInterface := false
+	if typ.Kind() == reflect.Interface {
+		isInterface = true
+	}
 	return &mockValueCodec[T]{
 		isInterface: isInterface,
 		seenTypes:   map[string]reflect.Type{},
@@ -113,7 +110,7 @@ func (m mockValueCodec[T]) Decode(b []byte) (t T, err error) {
 	wrappedValue := mockValueJSON{}
 	err = json.Unmarshal(b, &wrappedValue)
 	if err != nil {
-		return t, err
+		return
 	}
 	if !m.isInterface {
 		err = json.Unmarshal(wrappedValue.Value, &t)
@@ -122,7 +119,7 @@ func (m mockValueCodec[T]) Decode(b []byte) (t T, err error) {
 
 	typ, exists := m.seenTypes[wrappedValue.TypeName]
 	if !exists {
-		return t, fmt.Errorf("unknown type %s, you're dealing with interfaces... in order to make the interface types known for the MockValueCodec, you need to first encode them", wrappedValue.TypeName)
+		return t, fmt.Errorf("uknown type %s, you're dealing with interfaces... in order to make the interface types known for the MockValueCodec, you need to first encode them", wrappedValue.TypeName)
 	}
 
 	newT := reflect.New(typ).Interface()

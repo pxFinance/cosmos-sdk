@@ -98,7 +98,7 @@ func (s *MigrateTestSuite) Test_runMigrateCmdRecord() {
 	item := design99keyring.Item{
 		Key:         s.appName,
 		Data:        serializedRecord,
-		Description: "SDK keyring version",
+		Description: "SDK kerying version",
 	}
 
 	cmd := MigrateCommand()
@@ -130,7 +130,7 @@ func (s *MigrateTestSuite) Test_runMigrateCmdLegacyMultiInfo() {
 	item := design99keyring.Item{
 		Key:         s.appName,
 		Data:        serializedLegacyMultiInfo,
-		Description: "SDK keyring version",
+		Description: "SDK kerying version",
 	}
 
 	cmd := MigrateCommand()

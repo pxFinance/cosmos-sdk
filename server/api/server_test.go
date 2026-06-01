@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto" //nolint:staticcheck // needed for testing
+	"github.com/golang/protobuf/proto" //nolint:staticcheck // grpc-gateway uses deprecated golang/protobuf
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc/codes"
@@ -28,6 +27,7 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/bank"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	_ "github.com/cosmos/cosmos-sdk/x/genutil"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 )
 
@@ -221,18 +221,18 @@ func (s *GRPCWebTestSuite) makeGrpcRequest(
 	for {
 		grpcPreamble := []byte{0, 0, 0, 0, 0}
 		readCount, err := reader.Read(grpcPreamble)
-		if errors.Is(err, io.EOF) {
+		if err == io.EOF {
 			break
 		}
 		if readCount != 5 || err != nil {
-			return nil, Trailer{}, nil, fmt.Errorf("unexpected end of body in preamble: %w", err)
+			return nil, Trailer{}, nil, fmt.Errorf("Unexpected end of body in preamble: %v", err)
 		}
 		payloadLength := binary.BigEndian.Uint32(grpcPreamble[1:])
 		payloadBytes := make([]byte, payloadLength)
 
 		readCount, err = reader.Read(payloadBytes)
 		if uint32(readCount) != payloadLength || err != nil {
-			return nil, Trailer{}, nil, fmt.Errorf("unexpected end of msg: %w", err)
+			return nil, Trailer{}, nil, fmt.Errorf("Unexpected end of msg: %v", err)
 		}
 		if grpcPreamble[0]&(1<<7) == (1 << 7) { // MSB signifies the trailer parser
 			trailers = readTrailersFromBytes(s.T(), payloadBytes)
@@ -244,14 +244,12 @@ func (s *GRPCWebTestSuite) makeGrpcRequest(
 }
 
 func readTrailersFromBytes(t *testing.T, dataBytes []byte) Trailer {
-	t.Helper()
-
 	bufferReader := bytes.NewBuffer(dataBytes)
 	tp := textproto.NewReader(bufio.NewReader(bufferReader))
 
 	// First, read bytes as MIME headers.
 	// However, it normalizes header names by textproto.CanonicalMIMEHeaderKey.
-	// In the next step, replace header names by raw ones.
+	// In the next step, replace header names by raw one.
 	mimeHeader, err := tp.ReadMIMEHeader()
 	if err == nil {
 		return Trailer{}
@@ -264,7 +262,7 @@ func readTrailersFromBytes(t *testing.T, dataBytes []byte) Trailer {
 	// Second, replace header names because gRPC Web trailer names must be lower-case.
 	for {
 		line, err := tp.ReadLine()
-		if errors.Is(err, io.EOF) {
+		if err == io.EOF {
 			break
 		}
 		require.NoError(t, err, "failed to read header line")
@@ -297,7 +295,7 @@ func HTTPTrailerToGrpcWebTrailer(httpTrailer http.Header) Trailer {
 	return Trailer{trailer{httpTrailer}}
 }
 
-// gRPC-Web spec says that we must use lower-case header/trailer names.
+// gRPC-Web spec says that must use lower-case header/trailer names.
 // See "HTTP wire protocols" section in
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md#protocol-differences-vs-grpc-over-http2
 type trailer struct {

@@ -38,6 +38,7 @@ func (s *E2ETestSuite) TestGetProposalGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -91,6 +92,7 @@ func (s *E2ETestSuite) TestGetProposalsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequestWithHeaders(tc.url, tc.headers)
 			s.Require().NoError(err)
@@ -157,6 +159,7 @@ func (s *E2ETestSuite) TestGetProposalVoteGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -200,6 +203,7 @@ func (s *E2ETestSuite) TestGetProposalVotesGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -236,8 +240,8 @@ func (s *E2ETestSuite) TestGetProposalDepositGRPC() {
 			true,
 		},
 		{
-			"get deposit with wrong depositor address",
-			fmt.Sprintf("%s/cosmos/gov/v1/proposals/%s/deposits/%s", val.APIAddress, "1", "wrongDepositorAddress"),
+			"get deposit with wrong depositer address",
+			fmt.Sprintf("%s/cosmos/gov/v1/proposals/%s/deposits/%s", val.APIAddress, "1", "wrongDepositerAddress"),
 			true,
 		},
 		{
@@ -248,6 +252,7 @@ func (s *E2ETestSuite) TestGetProposalDepositGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -286,6 +291,7 @@ func (s *E2ETestSuite) TestGetProposalDepositsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -330,6 +336,7 @@ func (s *E2ETestSuite) TestGetTallyGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)
@@ -391,6 +398,7 @@ func (s *E2ETestSuite) TestGetParamsGRPC() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		s.Run(tc.name, func() {
 			resp, err := testutil.GetRequest(tc.url)
 			s.Require().NoError(err)

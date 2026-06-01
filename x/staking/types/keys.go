@@ -25,10 +25,9 @@ const (
 	RouterKey = ModuleName
 )
 
-// Keys for store prefixes
-// Last* values are constant during a block.
-
 var (
+	// Keys for store prefixes
+	// Last* values are constant during a block.
 	LastValidatorPowerKey = []byte{0x11} // prefix for each key to a validator index, for bonded validators
 	LastTotalPowerKey     = []byte{0x12} // prefix for the total power
 
@@ -56,15 +55,14 @@ var (
 
 	ParamsKey = []byte{0x51} // prefix for parameters for module x/staking
 
-	DelegationByValIndexKey = []byte{0x71} // key for delegations by a validator
-
-	// NOTE: keys in range 0x81–0x87 were previously used in liquid staking forks of the staking module.
-	// Module developers MUST NOT use these keys and MUST consider them "reserved".
+	DelegationByValIndexKey        = []byte{0x71} // key for delegations by a validator
+	DelegationTransferReceiversKey = []byte{0x72} // prefix for allowed delegation transfer receivers
 )
 
 // UnbondingType defines the type of unbonding operation
 type UnbondingType int
 
+//nolint:revive // we want these underscores, they make life easier
 const (
 	UnbondingType_Undefined UnbondingType = iota
 	UnbondingType_UnbondingDelegation

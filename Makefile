@@ -2,16 +2,7 @@
 
 PACKAGES_NOSIMULATION=$(shell go list ./... | grep -v '/simulation')
 PACKAGES_SIMTEST=$(shell go list ./... | grep '/simulation')
-
-# Ensure all tags are fetched
-VERSION_RAW := $(shell git fetch --tags --force >/dev/null 2>&1; git describe --tags --always --match "v*")
-VERSION := $(shell echo $(VERSION_RAW) | sed -E 's/^v?([0-9]+\.[0-9]+\.[0-9]+.*)/\1/')
-
-# Fallback if the version is just a commit hash (not semver-like)
-ifeq ($(findstring -,$(VERSION)),)  # No "-" means it's just a hash
-    VERSION := 0.0.0-$(VERSION_RAW)
-endif
-export VERSION
+export VERSION := $(shell echo $(shell git describe --tags --always --match "v*") | sed 's/^v//')
 export CMTVERSION := $(shell go list -m github.com/cometbft/cometbft | sed 's:.* ::')
 export COMMIT := $(shell git log -1 --format='%H')
 LEDGER_ENABLED ?= true
@@ -23,16 +14,8 @@ HTTPS_GIT := https://github.com/cosmos/cosmos-sdk.git
 DOCKER := $(shell which docker)
 PROJECT_NAME = $(shell git remote get-url origin | xargs basename -s .git)
 
-# Required for scripts (e.g. build-v54.sh)
-SH := $(shell command -v sh 2>/dev/null || true)
-ifeq ($(SH),)
-$(error sh not found. Required for build-v54 and other scripts. Install a POSIX shell.)
-endif
-# build-v54.sh uses bash-specific features (BASH_SOURCE, local)
-BASH := $(shell command -v bash 2>/dev/null || true)
-ifeq ($(BASH),)
-$(error bash not found. Required for build-v54. Install bash.)
-endif
+# Subdirectories for tagging
+SUBDIR_PREFIXES := api core errors store x/circuit x/evidence x/feegrant x/nft x/tx x/upgrade
 
 # process build tags
 build_tags = netgo
@@ -63,12 +46,17 @@ ifeq (secp,$(findstring secp,$(COSMOS_BUILD_OPTIONS)))
   build_tags += libsecp256k1_sdk
 endif
 
+ifeq (legacy,$(findstring legacy,$(COSMOS_BUILD_OPTIONS)))
+  build_tags += app_v1
+endif
+
 whitespace :=
 whitespace += $(whitespace)
 comma := ,
 build_tags_comma_sep := $(subst $(whitespace),$(comma),$(build_tags))
 
 # process linker flags
+
 ldflags = -X github.com/cosmos/cosmos-sdk/version.Name=sim \
 		-X github.com/cosmos/cosmos-sdk/version.AppName=simd \
 		-X github.com/cosmos/cosmos-sdk/version.Version=$(VERSION) \
@@ -115,6 +103,9 @@ endif
 
 all: tools build lint test vulncheck
 
+# The below include contains the tools and runsim targets.
+include contrib/devtools/Makefile
+
 ###############################################################################
 ###                                  Build                                  ###
 ###############################################################################
@@ -129,12 +120,6 @@ build-linux-amd64:
 build-linux-arm64:
 	GOOS=linux GOARCH=arm64 LEDGER_ENABLED=false $(MAKE) build
 
-build-darwin-amd64:
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 LEDGER_ENABLED=false $(MAKE) build
-
-build-darwin-arm64:
-	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 LEDGER_ENABLED=false $(MAKE) build
-
 $(BUILD_TARGETS): go.sum $(BUILDDIR)/
 	cd ${CURRENT_DIR}/simapp && go $@ -mod=readonly $(BUILD_FLAGS) $(BUILD_ARGS) ./...
 
@@ -147,11 +132,14 @@ cosmovisor:
 confix:
 	$(MAKE) -C tools/confix confix
 
-.PHONY: build build-linux-amd64 build-linux-arm64 build-darwin-amd64 build-darwin-arm64 cosmovisor confix
+hubl:
+	$(MAKE) -C tools/hubl hubl
 
-#? mocks: Generate mock file
+.PHONY: build build-linux-amd64 build-linux-arm64 cosmovisor confix
+
+
 mocks: $(MOCKS_DIR)
-	@go install go.uber.org/mock/mockgen@latest
+	@go install github.com/golang/mock/mockgen@v1.6.0
 	sh ./scripts/mockgen.sh
 .PHONY: mocks
 
@@ -159,7 +147,7 @@ mocks: $(MOCKS_DIR)
 vulncheck: $(BUILDDIR)/
 	GOBIN=$(BUILDDIR) go install golang.org/x/vuln/cmd/govulncheck@latest
 	$(BUILDDIR)/govulncheck ./...
-	
+
 $(MOCKS_DIR):
 	mkdir -p $(MOCKS_DIR)
 
@@ -181,11 +169,6 @@ go.sum: go.mod
 	echo "Ensure dependencies have not been modified ..." >&2
 	go mod verify
 	go mod tidy
-
-tidy-all:
-	sh ./scripts/go-mod-tidy-all.sh
-
-.PHONY: tidy-all
 
 ###############################################################################
 ###                              Documentation                              ###
@@ -247,10 +230,9 @@ $(CHECK_TEST_TARGETS): EXTRA_ARGS=-run=none
 $(CHECK_TEST_TARGETS): run-tests
 
 ARGS += -tags "$(test_tags)"
-SUB_MODULES = $(shell find . -type f -name 'go.mod' -print0 | xargs -0 -n1 dirname | sort | grep -v './tests/systemtests')
+SUB_MODULES = $(shell find . -type f -name 'go.mod' -print0 | xargs -0 -n1 dirname | sort)
 CURRENT_DIR = $(shell pwd)
 run-tests:
-	@(cd store/streaming/abci/examples/file && go build .)
 ifneq (,$(shell which tparse 2>/dev/null))
 	@echo "Starting unit tests"; \
 	finalec=0; \
@@ -279,14 +261,9 @@ endif
 
 test-sim-nondeterminism:
 	@echo "Running non-determinism test..."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout=30m -tags='sims' -run TestAppStateDeterminism \
-		-NumBlocks=100 -BlockSize=200 -Period=0
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -run TestAppStateDeterminism -Enabled=true \
+		-NumBlocks=100 -BlockSize=200 -Commit=true -Period=0 -v -timeout 24h
 
-
-test-sim-blockstm:
-	@echo "Running blockstm-determinism test..."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout=30m -tags='sims' -run TestAppStateDeterminismBSTMEquivalence \
-		-NumBlocks=100 -BlockSize=200 -Period=0
 # Requires an exported plugin. See store/streaming/README.md for documentation.
 #
 # example:
@@ -298,67 +275,61 @@ test-sim-blockstm:
 #   make test-sim-nondeterminism-streaming
 test-sim-nondeterminism-streaming:
 	@echo "Running non-determinism-streaming test..."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout=30m -tags='sims' -run TestAppStateDeterminism \
-		-NumBlocks=100 -BlockSize=200 -Period=0 -EnableStreaming=true
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -run TestAppStateDeterminism -Enabled=true \
+		-NumBlocks=100 -BlockSize=200 -Commit=true -Period=0 -v -timeout 24h -EnableStreaming=true
 
 test-sim-custom-genesis-fast:
 	@echo "Running custom genesis simulation..."
 	@echo "By default, ${HOME}/.simapp/config/genesis.json will be used."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout=30m -tags='sims' -run TestFullAppSimulation -Genesis=${HOME}/.simapp/config/genesis.json \
-		-NumBlocks=100 -BlockSize=200 -Seed=99 -Period=5 -SigverifyTx=false
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -run TestFullAppSimulation -Genesis=${HOME}/.simapp/config/genesis.json \
+		-Enabled=true -NumBlocks=100 -BlockSize=200 -Commit=true -Seed=99 -Period=5 -SigverifyTx=false -v -timeout 24h
 
-test-sim-import-export:
+test-sim-import-export: runsim
 	@echo "Running application import/export simulation. This may take several minutes..."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout 20m -tags='sims' -run TestAppImportExport \
-		-NumBlocks=50 -Period=5
+	@cd ${CURRENT_DIR}/simapp && $(BINDIR)/runsim -Jobs=4 -SimAppPkg=. -ExitOnFail 50 5 TestAppImportExport
 
-test-sim-after-import:
+test-sim-after-import: runsim
 	@echo "Running application simulation-after-import. This may take several minutes..."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout 30m -tags='sims' -run TestAppSimulationAfterImport \
-		-NumBlocks=50 -Period=5
+	@cd ${CURRENT_DIR}/simapp && $(BINDIR)/runsim -Jobs=4 -SimAppPkg=. -ExitOnFail 50 5 TestAppSimulationAfterImport
 
-test-sim-custom-genesis-multi-seed:
+test-sim-custom-genesis-multi-seed: runsim
 	@echo "Running multi-seed custom genesis simulation..."
 	@echo "By default, ${HOME}/.simapp/config/genesis.json will be used."
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout 30m -tags='sims' -run TestFullAppSimulation -Genesis=${HOME}/.simapp/config/genesis.json \
-		-NumBlocks=400 -Period=5
+	@cd ${CURRENT_DIR}/simapp && $(BINDIR)/runsim -Genesis=${HOME}/.simapp/config/genesis.json -SigverifyTx=false -SimAppPkg=. -ExitOnFail 400 5 TestFullAppSimulation
 
-test-sim-multi-seed-long:
+test-sim-multi-seed-long: runsim
 	@echo "Running long multi-seed application simulation. This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout=1h -tags='sims' -run TestFullAppSimulation \
-		-NumBlocks=500 -Period=50
+	@cd ${CURRENT_DIR}/simapp && $(BINDIR)/runsim -Jobs=4 -SimAppPkg=. -ExitOnFail 500 50 TestFullAppSimulation
 
-test-sim-multi-seed-short:
+test-sim-multi-seed-short: runsim
 	@echo "Running short multi-seed application simulation. This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -timeout 30m -tags='sims' -run TestFullAppSimulation \
-		-NumBlocks=50 -Period=10
+	@cd ${CURRENT_DIR}/simapp && $(BINDIR)/runsim -Jobs=4 -SimAppPkg=. -ExitOnFail 50 10 TestFullAppSimulation
+
+test-sim-benchmark-invariants:
+	@echo "Running simulation invariant benchmarks..."
+	cd ${CURRENT_DIR}/simapp && @go test -mod=readonly -benchmem -bench=BenchmarkInvariants -run=^$ \
+	-Enabled=true -NumBlocks=1000 -BlockSize=200 \
+	-Period=1 -Commit=true -Seed=57 -v -timeout 24h
 
 .PHONY: \
 test-sim-nondeterminism \
-test-sim-blockstm \
 test-sim-nondeterminism-streaming \
 test-sim-custom-genesis-fast \
 test-sim-import-export \
 test-sim-after-import \
 test-sim-custom-genesis-multi-seed \
 test-sim-multi-seed-short \
-test-sim-multi-seed-long
+test-sim-multi-seed-long \
+test-sim-benchmark-invariants
 
 SIM_NUM_BLOCKS ?= 500
 SIM_BLOCK_SIZE ?= 200
 SIM_COMMIT ?= true
 
-#? test-sim-fuzz: Run fuzz test for simapp
-test-sim-fuzz:
-	@echo "Running application fuzz for numBlocks=2, blockSize=20. This may take awhile!"
-#ld flags are a quick fix to make it work on current osx
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -json -tags='sims' -ldflags="-extldflags=-Wl,-ld_classic" -timeout=60m -fuzztime=60m -run=^$$ -fuzz=FuzzFullAppSimulation -GenesisTime=1714720615 -NumBlocks=2 -BlockSize=20
-
-#? test-sim-benchmark: Run benchmark test for simapp
 test-sim-benchmark:
 	@echo "Running application benchmark for numBlocks=$(SIM_NUM_BLOCKS), blockSize=$(SIM_BLOCK_SIZE). This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -tags='sims' -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$  \
-		-NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -Seed=57 -timeout 30m
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$  \
+		-Enabled=true -NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h
 
 # Requires an exported plugin. See store/streaming/README.md for documentation.
 #
@@ -371,13 +342,13 @@ test-sim-benchmark:
 #   make test-sim-benchmark-streaming
 test-sim-benchmark-streaming:
 	@echo "Running application benchmark for numBlocks=$(SIM_NUM_BLOCKS), blockSize=$(SIM_BLOCK_SIZE). This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$  \
-		-NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -EnableStreaming=true
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$  \
+		-Enabled=true -NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -EnableStreaming=true
 
 test-sim-profile:
 	@echo "Running application benchmark for numBlocks=$(SIM_NUM_BLOCKS), blockSize=$(SIM_BLOCK_SIZE). This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -benchmem -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$ \
-		-NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -cpuprofile cpu.out -memprofile mem.out
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -benchmem -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$ \
+		-Enabled=true -NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -cpuprofile cpu.out -memprofile mem.out
 
 # Requires an exported plugin. See store/streaming/README.md for documentation.
 #
@@ -390,10 +361,10 @@ test-sim-profile:
 #   make test-sim-profile-streaming
 test-sim-profile-streaming:
 	@echo "Running application benchmark for numBlocks=$(SIM_NUM_BLOCKS), blockSize=$(SIM_BLOCK_SIZE). This may take awhile!"
-	@cd ${CURRENT_DIR}/simapp && go test -failfast -mod=readonly -benchmem -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$ \
-		-NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -cpuprofile cpu.out -memprofile mem.out -EnableStreaming=true
+	@cd ${CURRENT_DIR}/simapp && go test -mod=readonly -benchmem -run=^$$ $(.) -bench ^BenchmarkFullAppSimulation$$ \
+		-Enabled=true -NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE) -Commit=$(SIM_COMMIT) -timeout 24h -cpuprofile cpu.out -memprofile mem.out -EnableStreaming=true
 
-.PHONY: test-sim-profile test-sim-benchmark test-sim-fuzz
+.PHONY: test-sim-profile test-sim-benchmark
 
 benchmark:
 	@go test -mod=readonly -bench=. $(PACKAGES_NOSIMULATION)
@@ -403,20 +374,20 @@ benchmark:
 ###                                Linting                                  ###
 ###############################################################################
 
-golangci_version=v2.12.2
+golangci_version=v1.51.2
 
 lint-install:
 	@echo "--> Installing golangci-lint $(golangci_version)"
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(golangci_version)
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(golangci_version)
 
 lint:
-	@echo "--> Running linter on all files"
-	@$(MAKE) lint-install
+	@echo "--> Running linter"
+	$(MAKE) lint-install
 	@./scripts/go-lint-all.bash --timeout=15m
 
 lint-fix:
 	@echo "--> Running linter"
-	@$(MAKE) lint-install
+	$(MAKE) lint-install
 	@./scripts/go-lint-all.bash --fix
 
 .PHONY: lint lint-fix
@@ -425,7 +396,7 @@ lint-fix:
 ###                                Protobuf                                 ###
 ###############################################################################
 
-protoVer=0.18.1
+protoVer=0.14.0
 protoImageName=ghcr.io/cosmos/proto-builder:$(protoVer)
 protoImage=$(DOCKER) run --rm -v $(CURDIR):/workspace --workdir /workspace $(protoImageName)
 
@@ -433,9 +404,7 @@ proto-all: proto-format proto-lint proto-gen
 
 proto-gen:
 	@echo "Generating Protobuf files"
-	@$(protoImage) sh ./scripts/protocgen.sh 2>&1 | tee protocgen.log | \
-	awk '{print $$0} /contains the reserved field name/ && /tendermint/ {next} 1'
-
+	@$(protoImage) sh ./scripts/protocgen.sh
 
 proto-swagger-gen:
 	@echo "Generating Protobuf Swagger"
@@ -449,17 +418,6 @@ proto-lint:
 
 proto-check-breaking:
 	@$(protoImage) buf breaking --against $(HTTPS_GIT)#branch=main
-
-# Build and push proto-builder image for amd64 and arm64 to ghcr.io.
-# Usage: make proto-docker-build [protoVer=0.18.1]
-# Requires: docker buildx, ghcr.io login (echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin)
-proto-docker-build:
-	docker buildx build \
-		--platform linux/amd64,linux/arm64 \
-		--push \
-		-f contrib/devtools/Dockerfile \
-		-t ghcr.io/cosmos/proto-builder:$(protoVer) \
-		contrib/devtools
 
 CMT_URL              = https://raw.githubusercontent.com/cometbft/cometbft/v0.38.0/proto/tendermint
 
@@ -498,7 +456,7 @@ proto-update-deps:
 
 	$(DOCKER) run --rm -v $(CURDIR)/proto:/workspace --workdir /workspace $(protoImageName) buf mod update
 
-.PHONY: proto-all proto-gen proto-swagger-gen proto-format proto-lint proto-check-breaking proto-docker-build proto-update-deps
+.PHONY: proto-all proto-gen proto-swagger-gen proto-format proto-lint proto-check-breaking proto-update-deps
 
 ###############################################################################
 ###                                Localnet                                 ###
@@ -511,7 +469,7 @@ localnet-build-dlv:
 
 localnet-build-nodes:
 	$(DOCKER) run --rm -v $(CURDIR)/.testnets:/data cosmossdk/simd \
-			  testnet init-files --validator-count 4 -o /data --starting-ip-address 192.168.10.2 --keyring-backend=test
+			  testnet init-files --v 4 -o /data --starting-ip-address 192.168.10.2 --keyring-backend=test
 	docker compose up -d
 
 localnet-stop:
@@ -528,40 +486,42 @@ localnet-debug: localnet-stop localnet-build-dlv localnet-build-nodes
 .PHONY: localnet-start localnet-stop localnet-debug localnet-build-env localnet-build-dlv localnet-build-nodes
 
 ###############################################################################
-###                              Enterprise Modules                          ###
+###                                Tagging                                  ###
 ###############################################################################
-#
-# Delegate to enterprise module Makefiles. Examples:
-#   make enterprise-all-lint      # Run lint in group and poa
-#   make enterprise-all-test      # Run test in group and poa
-#   make enterprise-group-build   # Run build in group only
-#   make enterprise-poa-localnet  # Run localnet in poa only
-#
-enterprise-%:
-	$(MAKE) -C enterprise $*
 
-.PHONY: enterprise-%
+# tag-client creates and pushes the special client tag with v2.0.0- prefix
+# Usage: make tag-client TAG=v1.2.3 (creates client/v2.0.0-v1.2.3)
+tag-client:
+ifndef TAG
+	$(error TAG is required. Usage: make tag-client TAG=v1.2.3)
+endif
+	@echo "Fetching latest tags from origin..."
+	@git fetch origin --tags
+	@echo "Creating client tag for $(TAG)..."
+	@client_tag="client/v2.0.0-$(TAG)"; \
+	echo "Creating tag: $$client_tag"; \
+	git tag "$$client_tag" $(TAG); \
+	echo "Pushing tag: $$client_tag"; \
+	git push origin "$$client_tag"
+	@echo "Successfully created and pushed client tag for $(TAG)"
 
-build-system-test-current: build
-	mkdir -p ./tests/systemtests/binaries/
-	cp $(BUILDDIR)/simd ./tests/systemtests/binaries/
+# tag-subdirs creates and pushes tags with subdir prefixes for a given tag
+# Usage: make tag-subdirs TAG=v1.2.3
+# NOTE: This also automatically creates the special client tag
+tag-subdirs: tag-client
+ifndef TAG
+	$(error TAG is required. Usage: make tag-subdirs TAG=v1.2.3)
+endif
+	@echo "Fetching latest tags from origin..."
+	@git fetch origin --tags
+	@echo "Creating and pushing subdir tags for $(TAG)..."
+	@for prefix in $(SUBDIR_PREFIXES); do \
+		new_tag="$$prefix/$(TAG)"; \
+		echo "Creating tag: $$new_tag"; \
+		git tag "$$new_tag" $(TAG); \
+		echo "Pushing tag: $$new_tag"; \
+		git push origin "$$new_tag"; \
+	done
+	@echo "Successfully created and pushed all subdir tags for $(TAG)"
 
-# test-sdk-system runs only the core SDK system tests (tests/systemtests), not enterprise.
-# Used by CI to avoid redundant runs when test-poa-system and test-group-system exist.
-test-sdk-system: build-v54 build-system-test-current
-	mkdir -p ./tests/systemtests/binaries/v0.54 ./tests/systemtests/testnet
-	mv $(BUILDDIR)/simdv54 ./tests/systemtests/binaries/v0.54/simd
-	$(MAKE) -C tests/systemtests test
-
-test-system: test-sdk-system
-	$(MAKE) -C enterprise/poa/ test-system
-	$(MAKE) -C enterprise/group/ test-system
-
-.PHONY: test-system test-sdk-system build-system-test-current
-
-# build-v54 fetches the v0.54 simd binary for system tests from the v0.54 nightlies channel.
-# Skips if $(BUILDDIR)/simdv54 exists (e.g. local dev reuse).
-build-v54:
-	@if [ -f $(BUILDDIR)/simdv54 ]; then echo "build/simdv54 exists, skipping"; else \
-		BUILDDIR=$(BUILDDIR) bash scripts/build-v54.sh; fi
-.PHONY: build-v54
+.PHONY: tag-subdirs tag-client

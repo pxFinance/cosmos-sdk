@@ -18,9 +18,6 @@ dist
 tools-stamp
 buf-stamp
 artifacts
-simapp/simd/simd
-enterprise/group/simapp/simd/simd
-enterprise/group/build/
 
 # Go
 go.work
@@ -35,8 +32,6 @@ client/lcd/keys/*
 coverage.out
 coverage.txt
 *profile.out
-pkgs*.txt
-pkgs*.part.*
 sim_log_file
 x/genutil/config
 x/genutil/data
@@ -55,9 +50,6 @@ vagrant
 *.iws
 .dir-locals.el
 .vscode
-.cursor
-
-.venv
 
 # Depinject & Graphviz
 dependency-graph.png
@@ -70,5 +62,3 @@ debug_container.log
 *.synctex.gz
 /x/genutil/config/priv_validator_key.json
 /x/genutil/data/priv_validator_state.json
-/.envrc
-/.env

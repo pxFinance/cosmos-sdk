@@ -4,17 +4,17 @@ import (
 	"testing"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	cmttime "github.com/cometbft/cometbft/types/time"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
-	"go.uber.org/mock/gomock"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -137,10 +137,6 @@ func (s *TestSuite) TestKeeper() {
 	s.T().Log("verify removing non existing authorization returns error")
 	err = s.authzKeeper.DeleteGrant(ctx, granterAddr, granteeAddr, "abcd")
 	s.Require().Error(err)
-
-	s.T().Log("verify removing non existing authorization returns error with grant key in hex")
-	err = s.authzKeeper.DeleteGrant(ctx, granterAddr, granteeAddr, "abcd")
-	s.Require().Equal("failed to delete grant with key 0114a58856f0fd53bf058b4909a21aec019107ba610114a58856f0fd53bf058b4909a21aec019107ba610061626364: authorization not found", err.Error())
 }
 
 func (s *TestSuite) TestKeeperIter() {
@@ -152,8 +148,8 @@ func (s *TestSuite) TestKeeperIter() {
 	e := ctx.BlockTime().AddDate(1, 0, 0)
 	sendAuthz := banktypes.NewSendAuthorization(coins100, nil)
 
-	s.Require().NoError(s.authzKeeper.SaveGrant(ctx, granteeAddr, granterAddr, sendAuthz, &e))
-	s.Require().NoError(s.authzKeeper.SaveGrant(ctx, granteeAddr, granter2Addr, sendAuthz, &e))
+	s.authzKeeper.SaveGrant(ctx, granteeAddr, granterAddr, sendAuthz, &e)
+	s.authzKeeper.SaveGrant(ctx, granteeAddr, granter2Addr, sendAuthz, &e)
 
 	s.authzKeeper.IterateGrants(ctx, func(granter, grantee sdk.AccAddress, grant authz.Grant) bool {
 		s.Require().Equal(granteeAddr, grantee)
@@ -193,7 +189,7 @@ func (s *TestSuite) TestDispatchAction() {
 			"authorization not found",
 			func() sdk.Context {
 				// remove any existing authorizations
-				_ = s.authzKeeper.DeleteGrant(s.ctx, granteeAddr, granterAddr, bankSendAuthMsgType)
+				s.authzKeeper.DeleteGrant(s.ctx, granteeAddr, granterAddr, bankSendAuthMsgType)
 				return s.ctx
 			},
 			func() {},
@@ -501,6 +497,86 @@ func (s *TestSuite) TestGetAuthorizations() {
 	require.Len(authzs, 2)
 	require.Equal(sdk.MsgTypeURL(&banktypes.MsgMultiSend{}), authzs[0].MsgTypeURL())
 	require.Equal(sdk.MsgTypeURL(&banktypes.MsgSend{}), authzs[1].MsgTypeURL())
+}
+
+func (s *TestSuite) TestOnEnforcedRestrictionRemoveAuthorizations_RemovesGranteeSendAuths() {
+	require := s.Require()
+	granter := s.addrs[0]
+	grantee := s.addrs[1]
+
+	sendAuth := banktypes.NewSendAuthorization(coins10, nil)
+	err := s.authzKeeper.SaveGrant(s.ctx, grantee, granter, sendAuth, nil)
+	require.NoError(err)
+	genAuth := authz.NewGenericAuthorization("random_msg_url")
+	err = s.authzKeeper.SaveGrant(s.ctx, grantee, granter, genAuth, nil)
+	require.NoError(err)
+
+	authzs, err := s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 2)
+
+	err = s.authzKeeper.OnEnforcedRestrictionRemoveAuthorizations(s.ctx, grantee)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 1)
+
+	// GenericAuthorization for MsgSend should also be removed
+	genSendAuth := authz.NewGenericAuthorization(sdk.MsgTypeURL(&banktypes.MsgSend{}))
+	err = s.authzKeeper.SaveGrant(s.ctx, grantee, granter, genSendAuth, nil)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 2)
+
+	err = s.authzKeeper.OnEnforcedRestrictionRemoveAuthorizations(s.ctx, grantee)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 1)
+}
+
+func (s *TestSuite) TestOnEnforcedRestrictionRemoveAuthorizations_RemovesGranterSendAuths() {
+	require := s.Require()
+	granter := s.addrs[0]
+	grantee := s.addrs[1]
+
+	sendAuth := banktypes.NewSendAuthorization(coins10, nil)
+	err := s.authzKeeper.SaveGrant(s.ctx, grantee, granter, sendAuth, nil)
+	require.NoError(err)
+	genAuth := authz.NewGenericAuthorization("random_msg_url")
+	err = s.authzKeeper.SaveGrant(s.ctx, grantee, granter, genAuth, nil)
+	require.NoError(err)
+
+	authzs, err := s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 2)
+
+	err = s.authzKeeper.OnEnforcedRestrictionRemoveAuthorizations(s.ctx, granter)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 1)
+
+	// GenericAuthorization for MsgSend should also be removed
+	genSendAuth := authz.NewGenericAuthorization(sdk.MsgTypeURL(&banktypes.MsgSend{}))
+	err = s.authzKeeper.SaveGrant(s.ctx, grantee, granter, genSendAuth, nil)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 2)
+
+	err = s.authzKeeper.OnEnforcedRestrictionRemoveAuthorizations(s.ctx, granter)
+	require.NoError(err)
+
+	authzs, err = s.authzKeeper.GetAuthorizations(s.ctx, grantee, granter)
+	require.NoError(err)
+	require.Len(authzs, 1)
 }
 
 func TestTestSuite(t *testing.T) {

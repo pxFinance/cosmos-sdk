@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -26,6 +26,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
 	_ "github.com/cosmos/cosmos-sdk/x/consensus"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 )
 
@@ -49,6 +50,7 @@ func (suite *SimTestSuite) SetupTest() {
 		depinject.Configs(
 			configurator.NewAppConfig(
 				configurator.AuthModule(),
+				configurator.ParamsModule(),
 				configurator.BankModule(),
 				configurator.StakingModule(),
 				configurator.ConsensusModule(),
@@ -59,7 +61,7 @@ func (suite *SimTestSuite) SetupTest() {
 
 	suite.NoError(err)
 
-	suite.ctx = suite.app.NewContext(false)
+	suite.ctx = suite.app.BaseApp.NewContext(false)
 }
 
 // TestWeightedOperations tests the weights of the operations.
@@ -67,7 +69,7 @@ func (suite *SimTestSuite) TestWeightedOperations() {
 	cdc := suite.cdc
 	appParams := make(simtypes.AppParams)
 
-	weightedOps := simulation.WeightedOperations(appParams, cdc, suite.txConfig, suite.accountKeeper, suite.bankKeeper)
+	weightesOps := simulation.WeightedOperations(appParams, cdc, suite.txConfig, suite.accountKeeper, suite.bankKeeper)
 
 	// setup 3 accounts
 	s := rand.NewSource(1)
@@ -83,7 +85,7 @@ func (suite *SimTestSuite) TestWeightedOperations() {
 		{10, types.ModuleName, sdk.MsgTypeURL(&types.MsgMultiSend{})},
 	}
 
-	for i, w := range weightedOps {
+	for i, w := range weightesOps {
 		operationMsg, _, err := w.Op()(r, suite.app.BaseApp, suite.ctx, accs, "")
 		suite.Require().NoError(err)
 
@@ -97,18 +99,17 @@ func (suite *SimTestSuite) TestWeightedOperations() {
 }
 
 // TestSimulateMsgSend tests the normal scenario of a valid message of type TypeMsgSend.
-// Abnormal scenarios, where the message is created by an errors, are not tested here.
+// Abonormal scenarios, where the message is created by an errors, are not tested here.
 func (suite *SimTestSuite) TestSimulateMsgSend() {
 	// setup 3 accounts
 	s := rand.NewSource(1)
 	r := rand.New(s)
 	accounts := suite.getTestingAccounts(r, 3)
 
-	_, err := suite.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	suite.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: suite.app.LastBlockHeight() + 1,
 		Hash:   suite.app.LastCommitID().Hash,
 	})
-	suite.Require().NoError(err)
 
 	// execute operation
 	op := simulation.SimulateMsgSend(suite.txConfig, suite.accountKeeper, suite.bankKeeper)
@@ -127,18 +128,17 @@ func (suite *SimTestSuite) TestSimulateMsgSend() {
 }
 
 // TestSimulateMsgSend tests the normal scenario of a valid message of type TypeMsgMultiSend.
-// Abnormal scenarios, where the message is created by an errors, are not tested here.
+// Abonormal scenarios, where the message is created by an errors, are not tested here.
 func (suite *SimTestSuite) TestSimulateMsgMultiSend() {
 	// setup 3 accounts
 	s := rand.NewSource(1)
 	r := rand.New(s)
 	accounts := suite.getTestingAccounts(r, 3)
 
-	_, err := suite.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	suite.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: suite.app.LastBlockHeight() + 1,
 		Hash:   suite.app.LastCommitID().Hash,
 	})
-	suite.Require().NoError(err)
 
 	// execute operation
 	op := simulation.SimulateMsgMultiSend(suite.txConfig, suite.accountKeeper, suite.bankKeeper)
@@ -170,11 +170,11 @@ func (suite *SimTestSuite) TestSimulateModuleAccountMsgSend() {
 	r := rand.New(s)
 	accounts := suite.getTestingAccounts(r, accCount)
 
-	_, err := suite.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	suite.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: suite.app.LastBlockHeight() + 1,
 		Hash:   suite.app.LastCommitID().Hash,
-	})
-	suite.Require().NoError(err)
+	},
+	)
 
 	// execute operation
 	op := simulation.SimulateMsgSendToModuleAccount(suite.txConfig, suite.accountKeeper, suite.bankKeeper, moduleAccCount)
@@ -204,11 +204,10 @@ func (suite *SimTestSuite) TestSimulateMsgMultiSendToModuleAccount() {
 	r := rand.New(s)
 	accounts := suite.getTestingAccounts(r, accCount)
 
-	_, err := suite.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	suite.app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: suite.app.LastBlockHeight() + 1,
 		Hash:   suite.app.LastCommitID().Hash,
 	})
-	suite.Require().NoError(err)
 
 	// execute operation
 	op := simulation.SimulateMsgMultiSendToModuleAccount(suite.txConfig, suite.accountKeeper, suite.bankKeeper, mAccCount)

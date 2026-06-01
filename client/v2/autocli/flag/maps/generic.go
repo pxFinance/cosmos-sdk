@@ -1,9 +1,9 @@
 package maps
 
 import (
-	"fmt"
-	"maps"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
 
 type genericMapValueOptions[K comparable, V any] struct {
@@ -29,15 +29,15 @@ func (gm *genericMapValue[K, V]) Set(val string) error {
 	ss := strings.Split(val, ",")
 	out := make(map[K]V, len(ss))
 	for _, pair := range ss {
-		key, val, found := strings.Cut(pair, "=")
-		if !found {
-			return fmt.Errorf("%s must be formatted as key=value", pair)
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 {
+			return errors.Errorf("%s must be formatted as key=value", pair)
 		}
-		parsedKey, err := gm.Options.keyParser(key)
+		key, err := gm.Options.keyParser(kv[0])
 		if err != nil {
 			return err
 		}
-		out[parsedKey], err = gm.Options.valueParser(val)
+		out[key], err = gm.Options.valueParser(kv[1])
 		if err != nil {
 			return err
 		}
@@ -45,7 +45,9 @@ func (gm *genericMapValue[K, V]) Set(val string) error {
 	if !gm.changed {
 		*gm.value = out
 	} else {
-		maps.Copy(*gm.value, out)
+		for k, v := range out {
+			(*gm.value)[k] = v
+		}
 	}
 	gm.changed = true
 	return nil

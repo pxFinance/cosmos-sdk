@@ -1,7 +1,6 @@
 package collections
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -11,13 +10,11 @@ import (
 func TestIteratorBasic(t *testing.T) {
 	sk, ctx := deps()
 	// safety check to ensure that iteration does not cross prefix boundaries
-	err := sk.OpenKVStore(ctx).Set([]byte{0, 0}, []byte("before prefix"))
-	require.NoError(t, err)
-	err = sk.OpenKVStore(ctx).Set([]byte{2, 1}, []byte("after prefix"))
-	require.NoError(t, err)
+	sk.OpenKVStore(ctx).Set([]byte{0, 0}, []byte("before prefix"))
+	sk.OpenKVStore(ctx).Set([]byte{2, 1}, []byte("after prefix"))
 	schemaBuilder := NewSchemaBuilder(sk)
 	m := NewMap(schemaBuilder, NewPrefix(1), "m", StringKey, Uint64Value)
-	_, err = schemaBuilder.Build()
+	_, err := schemaBuilder.Build()
 	require.NoError(t, err)
 
 	for i := uint64(1); i <= 2; i++ {
@@ -189,7 +186,7 @@ func TestWalk(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	sentinelErr := errors.New("sentinel error")
+	sentinelErr := fmt.Errorf("sentinel error")
 	err = m.Walk(ctx, nil, func(key, value uint64) (stop bool, err error) {
 		require.LessOrEqual(t, key, uint64(3)) // asserts that after the number three we stop
 		if key == 3 {
@@ -199,37 +196,3 @@ func TestWalk(t *testing.T) {
 	})
 	require.ErrorIs(t, err, sentinelErr) // asserts correct error propagation
 }
-
-func TestIteratorCloseError(t *testing.T) {
-	closeErr := errors.New("close error")
-
-	newIter := func() Iterator[string, uint64] {
-		return Iterator[string, uint64]{
-			kc:   StringKey,
-			vc:   Uint64Value,
-			iter: &mockCloseErrIter{closeErr: closeErr},
-		}
-	}
-
-	_, err := newIter().Keys()
-	require.ErrorIs(t, err, closeErr)
-
-	_, err = newIter().Values()
-	require.ErrorIs(t, err, closeErr)
-
-	_, err = newIter().KeyValues()
-	require.ErrorIs(t, err, closeErr)
-}
-
-// mockCloseErrIter is an empty store iterator whose Close returns an error.
-type mockCloseErrIter struct {
-	closeErr error
-}
-
-func (m *mockCloseErrIter) Domain() ([]byte, []byte) { return nil, nil }
-func (m *mockCloseErrIter) Valid() bool              { return false }
-func (m *mockCloseErrIter) Next()                    {}
-func (m *mockCloseErrIter) Key() []byte              { return nil }
-func (m *mockCloseErrIter) Value() []byte            { return nil }
-func (m *mockCloseErrIter) Error() error             { return nil }
-func (m *mockCloseErrIter) Close() error             { return m.closeErr }

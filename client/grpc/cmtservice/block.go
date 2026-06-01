@@ -3,7 +3,7 @@ package cmtservice
 import (
 	"context"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -40,13 +40,4 @@ func GetProtoBlock(ctx context.Context, clientCtx client.Context, height *int64)
 	protoBlockID := block.BlockID.ToProto()
 
 	return protoBlockID, protoBlock, nil
-}
-
-func getBlockResults(ctx context.Context, clientCtx client.Context, height *int64) (*coretypes.ResultBlockResults, error) {
-	node, err := clientCtx.GetNode()
-	if err != nil {
-		return nil, err
-	}
-
-	return node.BlockResults(ctx, height)
 }

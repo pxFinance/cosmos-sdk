@@ -1,4 +1,5 @@
 //go:build !libsecp256k1_sdk
+// +build !libsecp256k1_sdk
 
 package secp256k1
 
@@ -20,7 +21,7 @@ func (privKey *PrivKey) Sign(msg []byte) ([]byte, error) {
 	return sig[1:], nil
 }
 
-// VerifySignature verifies a signature of the form R || S.
+// VerifyBytes verifies a signature of the form R || S.
 // It rejects signatures which are not in lower-S form.
 func (pubKey *PubKey) VerifySignature(msg, sigStr []byte) bool {
 	if len(sigStr) != 64 {

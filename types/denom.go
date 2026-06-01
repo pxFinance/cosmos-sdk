@@ -47,7 +47,7 @@ func GetDenomUnit(denom string) (math.LegacyDec, bool) {
 	return unit, true
 }
 
-// SetBaseDenom allow overwriting the base denom
+// SetBaseDenom allow overwritting the base denom
 // if the denom has registered before, otherwise return error
 func SetBaseDenom(denom string) error {
 	_, ok := denomUnits[denom]

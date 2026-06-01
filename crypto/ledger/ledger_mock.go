@@ -1,4 +1,5 @@
 //go:build ledger && test_ledger_mock
+// +build ledger,test_ledger_mock
 
 package ledger
 
@@ -28,7 +29,7 @@ func init() {
 	initOptionsDefault()
 }
 
-type LedgerSECP256K1Mock struct{} //nolint: revive // we can ignore this, as this type is being used
+type LedgerSECP256K1Mock struct{}
 
 func (mock LedgerSECP256K1Mock) Close() error {
 	return nil
@@ -73,7 +74,7 @@ func (mock LedgerSECP256K1Mock) GetAddressPubKeySECP256K1(derivationPath []uint3
 	// re-serialize in the 33-byte compressed format
 	cmp, err := secp.ParsePubKey(pk)
 	if err != nil {
-		return nil, "", fmt.Errorf("error parsing public key: %w", err)
+		return nil, "", fmt.Errorf("error parsing public key: %v", err)
 	}
 
 	compressedPublicKey := make([]byte, csecp256k1.PubKeySize)

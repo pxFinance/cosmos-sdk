@@ -13,7 +13,7 @@ import (
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -24,6 +24,7 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 	_ "github.com/cosmos/cosmos-sdk/x/bank"
 	_ "github.com/cosmos/cosmos-sdk/x/consensus"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 )
 
@@ -44,6 +45,7 @@ func initFixture(t assert.TestingT) *fixture {
 			configurator.NewAppConfig(
 				configurator.AuthModule(),
 				configurator.TxModule(),
+				configurator.ParamsModule(),
 				configurator.ConsensusModule(),
 				configurator.BankModule(),
 				configurator.StakingModule(),
@@ -54,9 +56,9 @@ func initFixture(t assert.TestingT) *fixture {
 	)
 	assert.NilError(t, err)
 
-	f.ctx = app.NewContext(false)
+	f.ctx = app.BaseApp.NewContext(false)
 	queryHelper := &baseapp.QueryServiceTestHelper{
-		GRPCQueryRouter: app.GRPCQueryRouter(),
+		GRPCQueryRouter: app.BaseApp.GRPCQueryRouter(),
 		Ctx:             f.ctx,
 	}
 	f.appQueryClient = appv1alpha1.NewQueryClient(queryHelper)
@@ -70,7 +72,7 @@ func TestQueryAppConfig(t *testing.T) {
 	t.Parallel()
 	f := initFixture(t)
 
-	res, err := f.appQueryClient.Config(f.ctx, &appv1alpha1.QueryConfigRequest{}) //nolint:staticcheck // used for testing the deprecated code
+	res, err := f.appQueryClient.Config(f.ctx, &appv1alpha1.QueryConfigRequest{})
 	assert.NilError(t, err)
 	// app config is not nil
 	assert.Assert(t, res != nil && res.Config != nil)
@@ -81,7 +83,7 @@ func TestQueryAppConfig(t *testing.T) {
 	}
 
 	// has all expected modules
-	for _, modName := range []string{"auth", "bank", "tx", "consensus", "runtime", "staking"} {
+	for _, modName := range []string{"auth", "bank", "tx", "consensus", "runtime", "params", "staking"} {
 		modConfig := moduleConfigs[modName]
 		if modConfig == nil {
 			t.Fatalf("missing %s", modName)

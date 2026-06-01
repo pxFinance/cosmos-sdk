@@ -16,13 +16,13 @@ import (
 	bankv1beta1 "cosmossdk.io/api/cosmos/bank/v1beta1"
 	basev1beta1 "cosmossdk.io/api/cosmos/base/v1beta1"
 	sdkmath "cosmossdk.io/math"
+	"cosmossdk.io/x/tx/signing"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing"
 )
 
 func createTestInterfaceRegistry() types.InterfaceRegistry {
@@ -36,7 +36,7 @@ func createTestInterfaceRegistry() types.InterfaceRegistry {
 	return interfaceRegistry
 }
 
-func TestProtoMarshalInterface(t *testing.T) {
+func TestProtoMarsharlInterface(t *testing.T) {
 	cdc := codec.NewProtoCodec(createTestInterfaceRegistry())
 	m := interfaceMarshaler{cdc.MarshalInterface, cdc.UnmarshalInterface}
 	testInterfaceMarshaling(require.New(t), m, false)
@@ -121,7 +121,7 @@ func TestProtoCodecMarshal(t *testing.T) {
 
 // Emulate grpc server implementation
 // https://github.com/grpc/grpc-go/blob/b1d7f56b81b7902d871111b82dec6ba45f854ede/rpc_util.go#L590
-func grpcServerEncode(c encoding.Codec, msg any) ([]byte, error) {
+func grpcServerEncode(c encoding.Codec, msg interface{}) ([]byte, error) {
 	if msg == nil { // NOTE: typed nils will not be caught by this check
 		return nil, nil
 	}
@@ -165,9 +165,10 @@ func BenchmarkProtoCodecMarshalLengthPrefixed(b *testing.B) {
 		}),
 	}
 
+	b.ResetTimer()
 	b.ReportAllocs()
 
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		blob, err := pCdc.MarshalLengthPrefixed(msg)
 		if err != nil {
 			b.Fatal(err)

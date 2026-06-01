@@ -3,8 +3,8 @@ package aminojson_test
 import (
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson/internal/testpb"
+	"cosmossdk.io/x/tx/signing/aminojson"
+	"cosmossdk.io/x/tx/signing/aminojson/internal/testpb"
 )
 
 var sink any
@@ -45,7 +45,7 @@ func benchmarkAminoJSON(b *testing.B, addNaiveSort bool) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		sink = runAminoJSON(b, enc, addNaiveSort)
 	}
 	if sink == nil {

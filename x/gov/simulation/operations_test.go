@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/depinject"
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -34,14 +34,14 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	"github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
 
 var (
-	_ simtypes.WeightedProposalMsg = MockWeightedProposals{}
-	//nolint:staticcheck // keeping around for legacy testing
-	_ simtypes.WeightedProposalContent = MockWeightedProposals{}
+	_ simtypes.WeightedProposalMsg     = MockWeightedProposals{}
+	_ simtypes.WeightedProposalContent = MockWeightedProposals{} //nolint:staticcheck // testing legacy code path
 )
 
 type MockWeightedProposals struct {
@@ -62,9 +62,8 @@ func (m MockWeightedProposals) MsgSimulatorFn() simtypes.MsgSimulatorFn {
 	}
 }
 
-//nolint:staticcheck // retaining legacy content to maintain gov functionality
-func (m MockWeightedProposals) ContentSimulatorFn() simtypes.ContentSimulatorFn {
-	return func(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) simtypes.Content {
+func (m MockWeightedProposals) ContentSimulatorFn() simtypes.ContentSimulatorFn { //nolint:staticcheck // testing legacy code path
+	return func(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) simtypes.Content { //nolint:staticcheck // testing legacy code path
 		return v1beta1.NewTextProposal(
 			fmt.Sprintf("title-%d: %s", m.n, simtypes.RandStringOfLength(r, 100)),
 			fmt.Sprintf("description-%d: %s", m.n, simtypes.RandStringOfLength(r, 4000)),
@@ -74,16 +73,15 @@ func (m MockWeightedProposals) ContentSimulatorFn() simtypes.ContentSimulatorFn 
 
 func mockWeightedProposalMsg(n int) []simtypes.WeightedProposalMsg {
 	wpc := make([]simtypes.WeightedProposalMsg, n)
-	for i := range n {
+	for i := 0; i < n; i++ {
 		wpc[i] = MockWeightedProposals{i}
 	}
 	return wpc
 }
 
-// nolint // keeping this legacy proposal for testing
-func mockWeightedLegacyProposalContent(n int) []simtypes.WeightedProposalContent {
-	wpc := make([]simtypes.WeightedProposalContent, n)
-	for i := range n {
+func mockWeightedLegacyProposalContent(n int) []simtypes.WeightedProposalContent { //nolint:staticcheck // testing legacy code path
+	wpc := make([]simtypes.WeightedProposalContent, n) //nolint:staticcheck // testing legacy code path
+	for i := 0; i < n; i++ {
 		wpc[i] = MockWeightedProposals{i}
 	}
 	return wpc
@@ -145,11 +143,10 @@ func TestSimulateMsgSubmitProposal(t *testing.T) {
 	r := rand.New(s)
 	accounts := getTestingAccounts(t, r, suite.AccountKeeper, suite.BankKeeper, suite.StakingKeeper, ctx, 3)
 
-	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
 
 	// execute operation
 	op := simulation.SimulateMsgSubmitProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.MsgSimulatorFn())
@@ -177,11 +174,11 @@ func TestSimulateMsgSubmitLegacyProposal(t *testing.T) {
 	r := rand.New(s)
 	accounts := getTestingAccounts(t, r, suite.AccountKeeper, suite.BankKeeper, suite.StakingKeeper, ctx, 3)
 
-	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
+
 	// execute operation
 	op := simulation.SimulateMsgSubmitLegacyProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.ContentSimulatorFn())
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, "")
@@ -233,13 +230,12 @@ func TestSimulateMsgCancelProposal(t *testing.T) {
 	proposal, err := v1.NewProposal([]sdk.Msg{contentMsg}, 1, submitTime, submitTime.Add(*depositPeriod), "", "title", "summary", proposer, false)
 	require.NoError(t, err)
 
-	require.NoError(t, suite.GovKeeper.SetProposal(ctx, proposal))
+	suite.GovKeeper.SetProposal(ctx, proposal)
 
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
 
 	// execute operation
 	op := simulation.SimulateMsgCancelProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
@@ -281,13 +277,12 @@ func TestSimulateMsgDeposit(t *testing.T) {
 	proposal, err := v1.NewProposal([]sdk.Msg{contentMsg}, 1, submitTime, submitTime.Add(*depositPeriod), "", "text proposal", "description", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), false)
 	require.NoError(t, err)
 
-	require.NoError(t, suite.GovKeeper.SetProposal(ctx, proposal))
+	suite.GovKeeper.SetProposal(ctx, proposal)
 
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
 
 	// execute operation
 	op := simulation.SimulateMsgDeposit(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
@@ -330,13 +325,12 @@ func TestSimulateMsgVote(t *testing.T) {
 	proposal, err := v1.NewProposal([]sdk.Msg{contentMsg}, 1, submitTime, submitTime.Add(*depositPeriod), "", "text proposal", "description", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), false)
 	require.NoError(t, err)
 
-	require.NoError(t, suite.GovKeeper.ActivateVotingPeriod(ctx, proposal))
+	suite.GovKeeper.ActivateVotingPeriod(ctx, proposal)
 
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
 
 	// execute operation
 	op := simulation.SimulateMsgVote(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
@@ -377,13 +371,12 @@ func TestSimulateMsgVoteWeighted(t *testing.T) {
 	proposal, err := v1.NewProposal([]sdk.Msg{contentMsg}, 1, submitTime, submitTime.Add(*depositPeriod), "", "text proposal", "test", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), false)
 	require.NoError(t, err)
 
-	require.NoError(t, suite.GovKeeper.ActivateVotingPeriod(ctx, proposal))
+	suite.GovKeeper.ActivateVotingPeriod(ctx, proposal)
 
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+	app.FinalizeBlock(&abci.FinalizeBlockRequest{
 		Height: app.LastBlockHeight() + 1,
 		Hash:   app.LastCommitID().Hash,
 	})
-	require.NoError(t, err)
 
 	// execute operation
 	op := simulation.SimulateMsgVoteWeighted(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
@@ -412,8 +405,6 @@ type suite struct {
 
 // returns context and an app with updated mint keeper
 func createTestSuite(t *testing.T, isCheckTx bool) (suite, sdk.Context) {
-	t.Helper()
-
 	res := suite{}
 
 	app, err := simtestutil.Setup(
@@ -421,6 +412,7 @@ func createTestSuite(t *testing.T, isCheckTx bool) (suite, sdk.Context) {
 			configurator.NewAppConfig(
 				configurator.AuthModule(),
 				configurator.TxModule(),
+				configurator.ParamsModule(),
 				configurator.BankModule(),
 				configurator.StakingModule(),
 				configurator.ConsensusModule(),
@@ -432,23 +424,17 @@ func createTestSuite(t *testing.T, isCheckTx bool) (suite, sdk.Context) {
 		&res.TxConfig, &res.AccountKeeper, &res.BankKeeper, &res.GovKeeper, &res.StakingKeeper, &res.DistributionKeeper)
 	require.NoError(t, err)
 
-	ctx := app.NewContext(isCheckTx)
+	ctx := app.BaseApp.NewContext(isCheckTx)
 
 	res.App = app
 	return res, ctx
 }
 
 func getTestingAccounts(
-	t *testing.T,
-	r *rand.Rand,
-	accountKeeper authkeeper.AccountKeeper,
-	bankKeeper bankkeeper.Keeper,
-	stakingKeeper *stakingkeeper.Keeper,
-	ctx sdk.Context,
-	n int,
+	t *testing.T, r *rand.Rand,
+	accountKeeper authkeeper.AccountKeeper, bankKeeper bankkeeper.Keeper, stakingKeeper *stakingkeeper.Keeper,
+	ctx sdk.Context, n int,
 ) []simtypes.Account {
-	t.Helper()
-
 	accounts := simtypes.RandomAccounts(r, n)
 
 	initAmt := stakingKeeper.TokensFromConsensusPower(ctx, 200)

@@ -7,9 +7,9 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/cosmos-sdk/store/v2/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/v2/dbadapter"
-	"github.com/cosmos/cosmos-sdk/store/v2/types"
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/dbadapter"
+	"cosmossdk.io/store/types"
 )
 
 func DoBenchmarkDeepCacheStack(b *testing.B, depth int) {
@@ -68,11 +68,11 @@ func BenchmarkDeepCacheStack13(b *testing.B) {
 type CacheStack struct {
 	initialStore types.CacheKVStore
 	// Context of the initial state before transaction execution.
-	// It's the context used by `StateDB.CommittedState`.
+	// It's the context used by `StateDB.CommitedState`.
 	cacheStores []types.CacheKVStore
 }
 
-// CurrentStore returns the top context of cached stack,
+// CurrentContext returns the top context of cached stack,
 // if the stack is empty, returns the initial context.
 func (cs *CacheStack) CurrentStore() types.CacheKVStore {
 	l := len(cs.cacheStores)

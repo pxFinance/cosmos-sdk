@@ -16,13 +16,13 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"cosmossdk.io/x/tx/signing/aminojson"
+
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing/aminojson"
 )
 
 // ProtoCodecMarshaler defines an interface for codecs that utilize Protobuf for both
 // binary and JSON encoding.
-//
 // Deprecated: Use Codec instead.
 type ProtoCodecMarshaler interface {
 	Codec
@@ -248,7 +248,7 @@ func (pc *ProtoCodec) MarshalInterface(i gogoproto.Message) ([]byte, error) {
 //
 //	var x MyInterface
 //	err := cdc.UnmarshalInterface(bz, &x)
-func (pc *ProtoCodec) UnmarshalInterface(bz []byte, ptr any) error {
+func (pc *ProtoCodec) UnmarshalInterface(bz []byte, ptr interface{}) error {
 	any := &types.Any{}
 	err := pc.Unmarshal(bz, any)
 	if err != nil {
@@ -277,8 +277,8 @@ func (pc *ProtoCodec) MarshalInterfaceJSON(x gogoproto.Message) ([]byte, error) 
 // Example:
 //
 //	var x MyInterface  // must implement proto.Message
-//	err := cdc.UnmarshalInterfaceJSON(bz, &x)
-func (pc *ProtoCodec) UnmarshalInterfaceJSON(bz []byte, iface any) error {
+//	err := cdc.UnmarshalInterfaceJSON(&x, bz)
+func (pc *ProtoCodec) UnmarshalInterfaceJSON(bz []byte, iface interface{}) error {
 	any := &types.Any{}
 	err := pc.UnmarshalJSON(bz, any)
 	if err != nil {
@@ -290,7 +290,7 @@ func (pc *ProtoCodec) UnmarshalInterfaceJSON(bz []byte, iface any) error {
 // UnpackAny implements AnyUnpacker.UnpackAny method,
 // it unpacks the value in any to the interface pointer passed in as
 // iface.
-func (pc *ProtoCodec) UnpackAny(any *types.Any, iface any) error {
+func (pc *ProtoCodec) UnpackAny(any *types.Any, iface interface{}) error {
 	return pc.interfaceRegistry.UnpackAny(any, iface)
 }
 
@@ -342,7 +342,7 @@ type grpcProtoCodec struct {
 	cdc *ProtoCodec
 }
 
-func (g grpcProtoCodec) Marshal(v any) ([]byte, error) {
+func (g grpcProtoCodec) Marshal(v interface{}) ([]byte, error) {
 	switch m := v.(type) {
 	case proto.Message:
 		protov2MarshalOpts := proto.MarshalOptions{Deterministic: true}
@@ -354,7 +354,7 @@ func (g grpcProtoCodec) Marshal(v any) ([]byte, error) {
 	}
 }
 
-func (g grpcProtoCodec) Unmarshal(data []byte, v any) error {
+func (g grpcProtoCodec) Unmarshal(data []byte, v interface{}) error {
 	switch m := v.(type) {
 	case proto.Message:
 		return proto.Unmarshal(data, m)
@@ -369,7 +369,7 @@ func (g grpcProtoCodec) Name() string {
 	return "cosmos-sdk-grpc-codec"
 }
 
-func assertNotNil(i any) error {
+func assertNotNil(i interface{}) error {
 	if i == nil {
 		return errors.New("can't marshal <nil> value")
 	}

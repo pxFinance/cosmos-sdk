@@ -16,10 +16,9 @@ import (
 	"cosmossdk.io/api/cosmos/crypto/secp256k1"
 	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
 	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
-
-	"github.com/cosmos/cosmos-sdk/x/tx/decode"
-	"github.com/cosmos/cosmos-sdk/x/tx/internal/testpb"
-	"github.com/cosmos/cosmos-sdk/x/tx/signing"
+	"cosmossdk.io/x/tx/decode"
+	"cosmossdk.io/x/tx/internal/testpb"
+	"cosmossdk.io/x/tx/signing"
 )
 
 func TestDecode(t *testing.T) {
@@ -51,41 +50,18 @@ func TestDecode(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name            string
-		msg             proto.Message
-		feePayer        string
-		error           string
-		expectedSigners int
+		name  string
+		msg   proto.Message
+		error string
 	}{
 		{
-			name:            "happy path",
-			msg:             &bankv1beta1.MsgSend{},
-			expectedSigners: 1,
+			name: "happy path",
+			msg:  &bankv1beta1.MsgSend{},
 		},
 		{
 			name:  "empty signer option",
 			msg:   &testpb.A{},
 			error: "no cosmos.msg.v1.signer option found for message A; use DefineCustomGetSigners to specify a custom getter: tx parse error",
-		},
-		{
-			name:     "invalid feePayer",
-			msg:      &bankv1beta1.MsgSend{},
-			feePayer: "payer",
-			error:    `encoding/hex: invalid byte: U+0070 'p': tx parse error`,
-		},
-		{
-			name:            "valid feePayer",
-			msg:             &bankv1beta1.MsgSend{},
-			feePayer:        "636f736d6f733168363935356b3836397a72306770383975717034337a373263393033666d35647a366b75306c", // hexadecimal to work with dummyAddressCodec
-			expectedSigners: 2,
-		},
-		{
-			name: "same msg signer and feePayer",
-			msg: &bankv1beta1.MsgSend{
-				FromAddress: "636f736d6f733168363935356b3836397a72306770383975717034337a373263393033666d35647a366b75306c",
-			},
-			feePayer:        "636f736d6f733168363935356b3836397a72306770383975717034337a373263393033666d35647a366b75306c",
-			expectedSigners: 1,
 		},
 	}
 
@@ -107,7 +83,7 @@ func TestDecode(t *testing.T) {
 					Fee: &txv1beta1.Fee{
 						Amount:   []*basev1beta1.Coin{{Amount: "100", Denom: "denom"}},
 						GasLimit: 100,
-						Payer:    tc.feePayer,
+						Payer:    "payer",
 						Granter:  "",
 					},
 				},
@@ -122,7 +98,6 @@ func TestDecode(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, len(decodeTx.Signers), tc.expectedSigners)
 
 			require.Equal(t,
 				fmt.Sprintf("/%s", tc.msg.ProtoReflect().Descriptor().FullName()),

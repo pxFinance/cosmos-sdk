@@ -8,8 +8,7 @@ import (
 
 	v1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
 	errorsmod "cosmossdk.io/errors"
-
-	"github.com/cosmos/cosmos-sdk/x/tx/signing"
+	"cosmossdk.io/x/tx/signing"
 )
 
 // DecodedTx contains the decoded transaction, its signers, and other flags.
@@ -116,18 +115,6 @@ func (d *Decoder) Decode(txBytes []byte) (*DecodedTx, error) {
 			}
 			signers = append(signers, s)
 			seenSigners[string(s)] = struct{}{}
-		}
-	}
-
-	// If a fee payer is specified in the AuthInfo, it must be added to the list of signers
-	if authInfo.Fee != nil && authInfo.Fee.Payer != "" {
-		feeAddr, err := d.signingCtx.AddressCodec().StringToBytes(authInfo.Fee.Payer)
-		if err != nil {
-			return nil, errorsmod.Wrap(ErrTxDecode, err.Error())
-		}
-
-		if _, seen := seenSigners[string(feeAddr)]; !seen {
-			signers = append(signers, feeAddr)
 		}
 	}
 

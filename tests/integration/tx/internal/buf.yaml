@@ -5,7 +5,7 @@ deps:
   - buf.build/cosmos/gogo-proto
 lint:
   use:
-    - STANDARD
+    - DEFAULT
   except:
     - PACKAGE_VERSION_SUFFIX
 breaking:
